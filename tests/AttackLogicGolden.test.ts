@@ -42,7 +42,6 @@ function run(o: Partial<AttackLogicInput> & { attackTroops: number }) {
     attacker: { type: PlayerType.Human, numTiles: 20_000 },
     defender: null,
     defenderHasDefensePost: false,
-    falloutRatio: null,
     borderSize: 100,
     ...o,
   });
@@ -90,9 +89,6 @@ describe("attackLogic golden values", () => {
     const cases: Record<string, ReturnType<typeof run>> = {
       baseline: pvp(),
       "defender has defense post": pvp({ defenderHasDefensePost: true }),
-      "no fallout": pvp({ falloutRatio: null }),
-      "fallout 10%": pvp({ falloutRatio: 0.1 }),
-      "fallout 100%": pvp({ falloutRatio: 1 }),
       "defender is traitor": pvp({
         defender: defender({ ...base, isTraitor: true }),
       }),
@@ -113,10 +109,9 @@ describe("attackLogic golden values", () => {
       "disconnected teammate": pvp({
         defender: defender({ ...base, isDisconnectedTeammate: true }),
       }),
-      "defense post + fallout + traitor (stacking)": pvp({
+      "defense post + traitor (stacking)": pvp({
         terrain: TerrainType.Mountain,
         defenderHasDefensePost: true,
-        falloutRatio: 0.5,
         defender: defender({ ...base, isTraitor: true }),
       }),
     };
@@ -182,16 +177,14 @@ describe("attackLogic golden values", () => {
     const table: Record<string, ReturnType<typeof run>> = {};
     for (const terrain of TERRAINS)
       for (const type of [PlayerType.Human, PlayerType.Bot])
-        for (const atr of [100, 1_000, 10_000, 100_000, 1_000_000])
-          for (const fallout of [0, 0.5]) {
-            const key = `${TerrainType[terrain]} ${type} attack=${atr} fallout=${fallout}`;
-            table[key] = run({
-              terrain,
-              attackTroops: atr,
-              attacker: { type, numTiles: 1_000 },
-              falloutRatio: fallout > 0 ? fallout : null,
-            });
-          }
+        for (const atr of [100, 1_000, 10_000, 100_000, 1_000_000]) {
+          const key = `${TerrainType[terrain]} ${type} attack=${atr}`;
+          table[key] = run({
+            terrain,
+            attackTroops: atr,
+            attacker: { type, numTiles: 1_000 },
+          });
+        }
     expect(table).toMatchSnapshot();
   });
 

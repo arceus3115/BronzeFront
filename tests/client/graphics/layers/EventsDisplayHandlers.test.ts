@@ -122,7 +122,7 @@ describe("EventsDisplay handlers", () => {
             type: GameUpdateType.UnitIncoming,
             unitID: 7,
             message: "incoming!",
-            messageType: MessageType.NUKE_INBOUND,
+            messageType: MessageType.NAVAL_INVASION_INBOUND,
             playerID: 1,
           },
         ],
@@ -296,8 +296,8 @@ describe("EventsDisplay handlers", () => {
   describe("onUnitIncomingEvent", () => {
     const incoming = (
       playerID: number,
-      message = "nuke inbound",
-      messageType = MessageType.NUKE_INBOUND,
+      message = "naval invasion inbound",
+      messageType = MessageType.NAVAL_INVASION_INBOUND,
     ) => ({
       type: GameUpdateType.UnitIncoming,
       unitID: 7,
@@ -309,8 +309,8 @@ describe("EventsDisplay handlers", () => {
     it("shows incoming-unit warnings addressed to me", () => {
       ed.onUnitIncomingEvent(incoming(1) as never);
       expect(events()).toHaveLength(1);
-      expect(events()[0].description).toBe("nuke inbound");
-      expect(events()[0].type).toBe(MessageType.NUKE_INBOUND);
+      expect(events()[0].description).toBe("naval invasion inbound");
+      expect(events()[0].type).toBe(MessageType.NAVAL_INVASION_INBOUND);
     });
 
     it("ignores warnings addressed to other players", () => {
@@ -320,23 +320,6 @@ describe("EventsDisplay handlers", () => {
 
     it("translates incoming-unit keys with the owner's display name and troops", () => {
       ed.onUnitIncomingEvent(
-        incoming(1, "events_display.atom_bomb_inbound") as never,
-      );
-      ed.onUnitIncomingEvent(
-        incoming(
-          1,
-          "events_display.hydrogen_bomb_inbound",
-          MessageType.HYDROGEN_BOMB_INBOUND,
-        ) as never,
-      );
-      ed.onUnitIncomingEvent(
-        incoming(
-          1,
-          "events_display.mirv_inbound",
-          MessageType.MIRV_INBOUND,
-        ) as never,
-      );
-      ed.onUnitIncomingEvent(
         incoming(
           1,
           "events_display.naval_invasion_inbound",
@@ -345,9 +328,6 @@ describe("EventsDisplay handlers", () => {
       );
 
       expect(events().map((event) => event.description)).toEqual([
-        'events_display.atom_bomb_inbound {"name":"Stranger"}',
-        'events_display.hydrogen_bomb_inbound {"name":"Stranger"}',
-        'events_display.mirv_inbound {"name":"Stranger"}',
         'events_display.naval_invasion_inbound {"name":"Stranger","troops":"5000"}',
       ]);
     });
@@ -362,17 +342,9 @@ describe("EventsDisplay handlers", () => {
         playerID: 1,
         params: { unit: "unit_type.boat" },
       });
-      ed.onDisplayMessageEvent({
-        type: GameUpdateType.DisplayEvent,
-        message: "events_display.missile_intercepted",
-        messageType: MessageType.SAM_HIT,
-        playerID: 1,
-        params: { unit: "unit_type.atom_bomb" },
-      });
 
       expect(events().map((event) => event.description)).toEqual([
         'events_display.unit_destroyed {"unit":"Boat"}',
-        'events_display.missile_intercepted {"unit":"Atom Bomb"}',
       ]);
     });
   });

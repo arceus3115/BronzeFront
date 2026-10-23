@@ -7,7 +7,6 @@
   "multiplayer_frequency": 1,
   "ffa_frequency": 0,
   "team_frequency": 0,
-  "forced_modifiers": ["isWaterNukes:50"],
   "themes": ["europe"],
   "nations": [
     {

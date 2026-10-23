@@ -4,7 +4,6 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { ConstructionExecution } from "@openfront/engine/execution/ConstructionExecution";
-import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { Game, Player } from "@openfront/engine/game/Game";
 import { setup } from "../util/Setup";
 
@@ -69,31 +68,5 @@ describe("Construction economy", () => {
     expect(
       (player.units(UnitType.City)[0] as any).isUnderConstruction?.() ?? false,
     ).toBe(false);
-  });
-
-  test("MIRV gets more expensive with each launch", () => {
-    expect(game.config().unitInfo(UnitType.MIRV).cost(game, other)).toBe(
-      25_000_000n,
-    );
-
-    player.addGold(100_000_000n);
-
-    player.conquer(game.ref(1, 1));
-    player.buildUnit(UnitType.MissileSilo, game.ref(1, 1), {});
-
-    other.conquer(game.ref(10, 10));
-    game.addExecution(
-      new NukeExecution(UnitType.MIRV, player, game.ref(10, 10)),
-    );
-    game.executeNextTick(); // init
-    game.executeNextTick(); // create MIRV unit
-    game.executeNextTick();
-
-    expect(player.units(UnitType.MIRV)).toHaveLength(1);
-
-    // Price of the MIRV increases for everyone with each launch.
-    expect(game.config().unitInfo(UnitType.MIRV).cost(game, other)).toBe(
-      40_000_000n,
-    );
   });
 });

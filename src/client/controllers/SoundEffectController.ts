@@ -1,22 +1,10 @@
-import {
-  MessageType,
-  PlayerType,
-  UnitType,
-} from "@openfront/engine-api/game/GameTypes";
+import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { EventBus } from "@openfront/shared/EventBus";
 import { Controller } from "../Controller";
 import { PlaySoundEffectEvent, SoundEffect } from "../sound/Sounds";
 import { SendSpawnIntentEvent } from "../Transport";
 import { GameView, UnitView } from "../view";
-
-// A MIRV rains hundreds of warheads over a few seconds; playing a boom per
-// warhead churns the audio pipeline. Play at most one warhead boom per interval.
-const MIRV_HIT_SOUND_INTERVAL_TICKS = 5;
-
-// Several nukes can be announced inbound on the same tick (multiple silos,
-// multiple attackers); don't stack the alarm and evict other cues.
-const NUKE_WARNING_SOUND_INTERVAL_TICKS = 10;
 
 // A new factory stations every owned City/Port/Factory within range on the
 // same tick (FactoryExecution.createStation); play the cue once, not N times.
@@ -32,19 +20,12 @@ const TRAIN_STATION_SWEEP_INTERVAL_TICKS = 100;
 // Structures a train station can be attached to (see TrainStationExecution).
 const STATION_CAPABLE_TYPES = new Set<UnitType>([
   UnitType.City,
-  UnitType.Factory,
+  UnitType.Mine,
+  UnitType.Farm,
   UnitType.Port,
 ]);
 
-const NUKE_INBOUND_MESSAGES = new Set<MessageType>([
-  MessageType.NUKE_INBOUND,
-  MessageType.HYDROGEN_BOMB_INBOUND,
-  MessageType.MIRV_INBOUND,
-]);
-
 export class SoundEffectController implements Controller {
-  private lastMirvHitSoundTick = -Infinity;
-  private lastNukeWarningSoundTick = -Infinity;
   private lastTrainStationSoundTick = -Infinity;
   // A train station is a flag on an existing structure, not a unit — play the
   // build sound on the false→true edge only, so structures that already have
@@ -99,19 +80,6 @@ export class SoundEffectController implements Controller {
       }
     }
 
-    for (const u of updates[GameUpdateType.UnitIncoming] ?? []) {
-      if (u.playerID !== myPlayer.smallID()) continue;
-      if (!NUKE_INBOUND_MESSAGES.has(u.messageType)) continue;
-      const tick = this.game.ticks();
-      if (
-        tick - this.lastNukeWarningSoundTick <
-        NUKE_WARNING_SOUND_INTERVAL_TICKS
-      ) {
-        continue;
-      }
-      this.lastNukeWarningSoundTick = tick;
-      this.emit("nuke-warning");
-    }
   }
 
   private handleUnit(unit: UnitView): void {
@@ -121,42 +89,11 @@ export class SoundEffectController implements Controller {
     if (STATION_CAPABLE_TYPES.has(unit.type())) {
       this.handleTrainStation(unit);
     }
-    switch (unit.type()) {
-      case UnitType.AtomBomb:
-        this.onNukeDetonation(unit, "atom-hit");
-        break;
-      case UnitType.MIRVWarhead:
-        this.onMirvWarheadDetonation(unit);
-        break;
-      case UnitType.HydrogenBomb:
-        this.onNukeDetonation(unit, "hydrogen-hit");
-        break;
-    }
-  }
-
-  private onMirvWarheadDetonation(unit: UnitView): void {
-    if (unit.isActive()) return;
-    if (!unit.reachedTarget()) return;
-    const tick = this.game.ticks();
-    if (tick - this.lastMirvHitSoundTick < MIRV_HIT_SOUND_INTERVAL_TICKS) {
-      return;
-    }
-    this.lastMirvHitSoundTick = tick;
-    this.emit("atom-hit");
   }
 
   private onCreated(unit: UnitView): void {
     const myPlayer = this.game.myPlayer();
     switch (unit.type()) {
-      case UnitType.AtomBomb:
-        this.emit("atom-launch");
-        break;
-      case UnitType.HydrogenBomb:
-        this.emit("hydrogen-launch");
-        break;
-      case UnitType.MIRV:
-        this.emit("mirv-launch");
-        break;
       case UnitType.Warship:
         if (unit.owner() === myPlayer) this.emit("build-warship");
         break;
@@ -169,13 +106,8 @@ export class SoundEffectController implements Controller {
       case UnitType.DefensePost:
         if (unit.owner() === myPlayer) this.emit("build-defense-post");
         break;
-      case UnitType.SAMLauncher:
-        if (unit.owner() === myPlayer) this.emit("sam-built");
-        break;
-      case UnitType.MissileSilo:
-        if (unit.owner() === myPlayer) this.emit("silo-built");
-        break;
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         if (unit.owner() === myPlayer) this.emit("build-factory");
         break;
       case UnitType.TransportShip:
@@ -234,12 +166,6 @@ export class SoundEffectController implements Controller {
       }
     }
     this.hadTrainStation.set(unit.id(), hasStation);
-  }
-
-  private onNukeDetonation(unit: UnitView, sound: SoundEffect): void {
-    if (unit.isActive()) return;
-    if (!unit.reachedTarget()) return;
-    this.emit(sound);
   }
 
   private emit(sound: SoundEffect): void {

@@ -30,7 +30,7 @@ export class ConnectedComponents {
   private _componentSizes: number[] = [];
 
   // Incremental update state (see addWaterTiles): water tiles are only
-  // ever ADDED to the map (land→water via water nukes), so components can
+  // ever ADDED to the map (land→water), so components can
   // only grow or merge — never split.  Merges are tracked with a
   // union-find alias table instead of relabeling tiles.
   private parents: number[] = [];

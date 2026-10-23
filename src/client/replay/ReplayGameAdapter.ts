@@ -75,9 +75,6 @@ export class ReplayUnitView {
   isUnderConstruction(): boolean {
     return this.state.underConstruction;
   }
-  missileTimerQueue(): number[] {
-    return this.state.missileTimerQueue;
-  }
   tile(): TileRef {
     return this.state.pos as TileRef;
   }
@@ -162,15 +159,6 @@ export class ReplayPlayerView {
   }
   isDisconnected(): boolean {
     return this.state?.isDisconnected ?? false;
-  }
-  inDoomsdayClock(): boolean {
-    return this.state?.inDoomsdayClock ?? false;
-  }
-  isDecaying(): boolean {
-    return this.state?.isDecaying ?? false;
-  }
-  markedDoomsdayClockTick(): number {
-    return this.state?.markedDoomsdayClockTick ?? 0;
   }
   /** Pending alliance requests, as of this frame. */
   isRequestingAllianceWith(other: ReplayPlayerView): boolean {

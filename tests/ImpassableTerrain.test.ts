@@ -8,12 +8,10 @@ import {
   PlayerInfo,
   PlayerType,
   TerrainType,
-  UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { GameConfig } from "@openfront/engine-api/Schemas";
 import { genTerrainFromBin } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
-import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { Game, Player } from "@openfront/engine/game/Game";
 import { createGame } from "@openfront/engine/game/GameImpl";
@@ -121,13 +119,6 @@ describe("Impassable Terrain", () => {
       new PlayerInfo("player", PlayerType.Human, "c1", "player_id"),
       new PlayerInfo("other", PlayerType.Human, "c2", "other_id"),
     ]);
-    // Override nuke settings for deterministic tests.
-    (game.config() as TestConfig).nukeMagnitudes = vi.fn(() => ({
-      inner: 5,
-      outer: 5,
-    }));
-    (game.config() as TestConfig).nukeAllianceBreakThreshold = vi.fn(() => 999);
-    (game.config() as TestConfig).setDefaultNukeSpeed(50);
 
     player = game.player("player_id");
     other = game.player("other_id");
@@ -264,98 +255,6 @@ describe("Impassable Terrain", () => {
     }
   });
 
-  // ── Nukes: targeting ─────────────────────────────────────────────────
-
-  test("canBuild(AtomBomb) returns false for impassable target", () => {
-    expect(player.canBuild(UnitType.AtomBomb, game.ref(WALL_X, 50))).toBe(
-      false,
-    );
-  });
-
-  test("canBuild(MIRV) returns false for impassable target", () => {
-    expect(player.canBuild(UnitType.MIRV, game.ref(WALL_X, 50))).toBe(false);
-  });
-
-  test("nuke execution deactivates when targeting impassable tile", () => {
-    player.conquer(game.ref(10, 10));
-    player.buildUnit(UnitType.MissileSilo, game.ref(10, 10), {});
-    const nuke = new NukeExecution(
-      UnitType.AtomBomb,
-      player,
-      game.ref(WALL_X, 10),
-    );
-    game.addExecution(nuke);
-    executeTicks(game, 5);
-    expect(nuke.isActive()).toBe(false);
-  });
-
-  // ── Nukes: blast radius ───────────────────────────────────────────────
-
-  test("nuke blast does not destroy or flood impassable tiles", () => {
-    player.conquer(game.ref(10, 100));
-    player.buildUnit(UnitType.MissileSilo, game.ref(10, 100), {});
-    // Other player owns a tile just left of the wall.
-    other.conquer(game.ref(WALL_X - 1, 100));
-
-    const nuke = new NukeExecution(
-      UnitType.AtomBomb,
-      player,
-      game.ref(WALL_X - 1, 100),
-      game.ref(10, 100),
-    );
-    game.addExecution(nuke);
-    executeTicks(game, 30);
-
-    // Impassable tiles should still be land and impassable (not flooded).
-    for (let y = 95; y <= 105; y++) {
-      const t = game.ref(WALL_X, y);
-      expect(game.isLand(t)).toBe(true);
-      expect(game.isImpassable(t)).toBe(true);
-    }
-  });
-
-  // ── Nukes: trajectory ─────────────────────────────────────────────────
-
-  test("nuke flies over impassable terrain and detonates", () => {
-    player.conquer(game.ref(20, 100));
-    player.buildUnit(UnitType.MissileSilo, game.ref(20, 100), {});
-    // Target is on the right side of the wall — trajectory crosses it.
-    const target = game.ref(150, 100);
-    expect(game.isImpassable(target)).toBe(false);
-
-    const nuke = new NukeExecution(UnitType.AtomBomb, player, target);
-    game.addExecution(nuke);
-    executeTicks(game, 30);
-    expect(nuke.getNuke()).not.toBeNull();
-    expect(nuke.getNuke()!.reachedTarget()).toBe(true);
-  });
-
-  test("nuke can launch when trajectory does not cross impassable terrain", () => {
-    player.conquer(game.ref(20, 100));
-    player.buildUnit(UnitType.MissileSilo, game.ref(20, 100), {});
-    // Target is on the same (left) side — no impassable terrain in between.
-    const target = game.ref(50, 100);
-    expect(game.isImpassable(target)).toBe(false);
-
-    const nuke = new NukeExecution(UnitType.AtomBomb, player, target);
-    game.addExecution(nuke);
-    executeTicks(game, 40);
-    // Should have detonated and deactivated normally.
-    expect(nuke.isActive()).toBe(false);
-  });
-
-  test("MIRV warhead flies over impassable terrain", () => {
-    player.conquer(game.ref(20, 100));
-    player.buildUnit(UnitType.MissileSilo, game.ref(20, 100), {});
-    // Target is on the right side of the wall — trajectory must cross it.
-    const target = game.ref(150, 100);
-    expect(game.isImpassable(target)).toBe(false);
-
-    const nuke = new NukeExecution(UnitType.MIRVWarhead, player, target);
-    game.addExecution(nuke);
-    executeTicks(game, 2);
-    expect(nuke.isActive()).toBe(true);
-  });
   // ── Water conversion guard ────────────────────────────────────────────
 
   test("setWater does not convert impassable tiles", () => {
@@ -419,39 +318,4 @@ describe("Impassable Terrain", () => {
     });
   });
 
-  // ── Nukes: silo selection ─────────────────────────────────────────────
-
-  describe("silo selection with impassable terrain", () => {
-    function buildSilo(g: Game, p: Player, x: number, y: number) {
-      p.conquer(g.ref(x, y));
-      p.buildUnit(UnitType.MissileSilo, g.ref(x, y), {});
-    }
-
-    test("closest silo is chosen even when the trajectory crosses impassable terrain", () => {
-      // 60 tiles from the target but on the other side of the wall.
-      buildSilo(game, player, 90, 100);
-      // 70 tiles from the target, same side.
-      buildSilo(game, player, 150, 30);
-
-      const target = game.ref(150, 100);
-      expect(player.canBuild(UnitType.AtomBomb, target)).toBe(
-        game.ref(90, 100),
-      );
-
-      const nuke = new NukeExecution(UnitType.AtomBomb, player, target);
-      game.addExecution(nuke);
-      executeTicks(game, 30);
-      expect(nuke.getNuke()).not.toBeNull();
-      expect(nuke.getNuke()!.reachedTarget()).toBe(true);
-    });
-
-    test("MIRV silo selection ignores impassable terrain", () => {
-      buildSilo(game, player, 20, 100);
-      // MIRV targets must be owned.
-      other.conquer(game.ref(150, 100));
-      expect(player.canBuild(UnitType.MIRV, game.ref(150, 100))).toBe(
-        game.ref(20, 100),
-      );
-    });
-  });
 });

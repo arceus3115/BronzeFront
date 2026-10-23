@@ -237,9 +237,9 @@ describe("snapshot: warships and trade ships", () => {
     const boat = p2.units(UnitType.TransportShip)[0];
     expect(boat).toBeDefined();
     await expectSnapshotRoundTrip(game, MAP, 40);
-    // Sunk by the warship's shells before it could land.
+    // Warships no longer fire shells, so the transport lands.
     expect(boat.isActive()).toBe(false);
-    expect(game.owner(game.ref(2, 14))).toBe(p1);
+    expect(game.owner(game.ref(2, 14))).toBe(p2);
   });
 });
 
@@ -287,14 +287,14 @@ describe("snapshot: trains", () => {
     ]) {
       a.buildUnit(UnitType.City, game.ref(x, y), {});
     }
-    const factory = a.buildUnit(UnitType.Factory, game.ref(50, 50), {});
+    const factory = a.buildUnit(UnitType.Mine, game.ref(50, 50), {});
     game.addExecution(new FactoryExecution(factory));
     let ticks = 0;
-    while (game.units(UnitType.Train).length === 0 && ticks < 3000) {
+    while (game.units(UnitType.Depot).length === 0 && ticks < 3000) {
       game.executeNextTick();
       ticks++;
     }
-    expect(game.units(UnitType.Train).length).toBeGreaterThan(0);
+    expect(game.units(UnitType.Depot).length).toBeGreaterThan(0);
     executeTicks(game, 3);
     await expectSnapshotRoundTrip(game, MAP, 80);
     // Later, with more trains on the network and some mid-stop.

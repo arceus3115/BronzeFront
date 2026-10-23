@@ -943,15 +943,9 @@ export class GraphicsAdvancedSettings extends LitElement {
             <div class="flex flex-col gap-2">
               <setting-toggle
                 label=${this.layerName(layer.id)}
-                description=${`${
-                  layer.placement === "land"
-                    ? translateText("graphics_setting.layer_placement_land")
-                    : translateText("graphics_setting.layer_placement_water")
-                }${
-                  layer.nukeable
-                    ? ` · ${translateText("graphics_setting.layer_nukeable")}`
-                    : ""
-                }`}
+                description=${layer.placement === "land"
+                  ? translateText("graphics_setting.layer_placement_land")
+                  : translateText("graphics_setting.layer_placement_water")}
                 id=${`map-layer-${layer.id}-toggle`}
                 .checked=${this.isLayerVisible(layer.id)}
                 ?disabled=${!layersOn}

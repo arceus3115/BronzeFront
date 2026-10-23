@@ -29,23 +29,21 @@ const COST_POLL_TICKS = 10;
 /** Units whose costs the panel tracks (the build steps). */
 const COST_POLL_TYPES = [
   UnitType.City,
-  UnitType.Factory,
+  UnitType.Farm,
+  UnitType.Mine,
   UnitType.Port,
   UnitType.DefensePost,
   UnitType.Warship,
-  UnitType.MissileSilo,
-  UnitType.AtomBomb,
 ] as const;
 
 /** `unit_type.*` name key per build-step unit, for the earn-gold text. */
 const UNIT_NAME_KEYS: Partial<Record<UnitType, string>> = {
   [UnitType.City]: "city",
-  [UnitType.Factory]: "factory",
+  [UnitType.Farm]: "farm",
+  [UnitType.Mine]: "mine",
   [UnitType.Port]: "port",
   [UnitType.DefensePost]: "defense_post",
   [UnitType.Warship]: "warship",
-  [UnitType.MissileSilo]: "missile_silo",
-  [UnitType.AtomBomb]: "atom_bomb",
 };
 /** Ticks the "you're ready" message stays up before the panel closes. */
 const COMPLETE_LINGER_TICKS = 50;
@@ -69,24 +67,22 @@ const TOUCH_TEXT_STEPS = new Set([
   "attack_wilderness",
   "buy_city",
   "propose_alliance",
-  "buy_factory",
+  "buy_farm",
+  "buy_mine",
   "send_boat",
   "buy_port",
   "buy_defense_post",
   "buy_warship",
-  "buy_silo",
-  "launch_atom",
 ]);
 
 /** Defaults shown when the player hasn't rebound the action (see UnitDisplay). */
 const HOTKEY_FALLBACKS = {
   buildCity: "1",
-  buildFactory: "2",
+  buildFarm: "2",
+  buildMine: "5",
   buildPort: "3",
   buildDefensePost: "4",
   buildWarship: "7",
-  buildMissileSilo: "5",
-  buildAtomBomb: "8",
 } as const;
 
 @customElement("tutorial-panel")
@@ -105,8 +101,6 @@ export class TutorialPanel extends LitElement implements Controller {
   private costs = new Map<UnitType, bigint>();
   private keybinds: Record<string, { key?: string }> | null = null;
   private mapMarksActive = false;
-  /** Latched: an atom bomb of ours was seen in flight at least once. */
-  private atomLaunchSeen = false;
   /** Latched: a transport ship of ours was seen afloat at least once. */
   private boatSeen = false;
   /** Attack ratio as of the previous tick, to spot the slider moving. */
@@ -365,26 +359,12 @@ export class TutorialPanel extends LitElement implements Controller {
         .config()
         .isUnitDisabled(UnitType.DefensePost),
       defensePosts: player.units(UnitType.DefensePost).length,
-      factoryDisabled: this.game.config().isUnitDisabled(UnitType.Factory),
-      factories: player.units(UnitType.Factory).length,
+      farmDisabled: this.game.config().isUnitDisabled(UnitType.Farm),
+      farms: player.units(UnitType.Farm).length,
+      mineDisabled: this.game.config().isUnitDisabled(UnitType.Mine),
+      mines: player.units(UnitType.Mine).length,
       warshipDisabled: this.game.config().isUnitDisabled(UnitType.Warship),
       warships: player.units(UnitType.Warship).length,
-      siloDisabled: this.game.config().isUnitDisabled(UnitType.MissileSilo),
-      silos: player.units(UnitType.MissileSilo).length,
-      atomDisabled: this.game.config().isUnitDisabled(UnitType.AtomBomb),
-      // Mirrors PlayerImpl.nukeSpawn's ready-silo filter.
-      siloReady: player
-        .units(UnitType.MissileSilo)
-        .some(
-          (s) => s.isActive() && !s.isInCooldown() && !s.isUnderConstruction(),
-        ),
-      atomLaunched: (this.atomLaunchSeen ||=
-        player.units(UnitType.AtomBomb).length > 0),
-      hydrogenDisabled: this.game
-        .config()
-        .isUnitDisabled(UnitType.HydrogenBomb),
-      mirvDisabled: this.game.config().isUnitDisabled(UnitType.MIRV),
-      samDisabled: this.game.config().isUnitDisabled(UnitType.SAMLauncher),
     };
   }
 
@@ -561,11 +541,6 @@ export class TutorialPanel extends LitElement implements Controller {
         unit: translateText(`unit_type.${UNIT_NAME_KEYS[step.unit!]}`),
         cost: renderNumber(cost),
       });
-    }
-    // The launch step must not claim the silo is armed while it's still
-    // under construction or reloading.
-    if (!done && step.id === "launch_atom" && this.ctx?.siloReady === false) {
-      return translateText("tutorial.step.silo_loading");
     }
     const id =
       !done && step.id === "capture_tribes" && this.attackNations

@@ -159,10 +159,6 @@ export class PlayerRow extends LitElement {
       case RankType.ConquestNations:
       case RankType.ConquestBots:
         return this.renderScoreAsBar();
-      case RankType.Atoms:
-      case RankType.Hydros:
-      case RankType.MIRV:
-        return this.renderBombScore();
       case RankType.TotalGold:
       case RankType.ConqueredGold:
       case RankType.StolenGold:
@@ -217,10 +213,6 @@ export class PlayerRow extends LitElement {
         </div>
       </div>
     `;
-  }
-
-  private renderBombScore() {
-    return this.renderValueScore(false);
   }
 
   private renderGoldScore() {

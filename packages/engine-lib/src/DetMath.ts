@@ -4,7 +4,7 @@
  * The JS spec only requires Math.exp/log/pow/atan2 to be "implementation
  * approximated", and engines differ in the last bit. The simulation runs on
  * every client and compares hashes, so a one-bit difference that lands on a
- * truncation boundary (toInt on troops, floor on gold, the nuke edge) is a
+ * truncation boundary (toInt on troops, floor on gold) is a
  * desync. These versions use only + - * / and bit views, which IEEE 754
  * requires to be correctly rounded, so every engine produces the same bits.
  *

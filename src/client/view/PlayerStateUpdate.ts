@@ -17,6 +17,10 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   if (pu.deathPosition !== undefined) target.deathPosition = pu.deathPosition;
   if (pu.tilesOwned !== undefined) target.tilesOwned = pu.tilesOwned;
   if (pu.gold !== undefined) target.gold = Number(pu.gold);
+  if (pu.food !== undefined) target.food = Number(pu.food);
+  if (pu.science !== undefined) target.science = Number(pu.science);
+  if (pu.bronzeWeapons !== undefined) target.bronzeWeapons = pu.bronzeWeapons;
+  if (pu.markets !== undefined) target.markets = pu.markets;
   if (pu.tradeGold !== undefined) target.tradeGold = Number(pu.tradeGold);
   if (pu.trainGold !== undefined) target.trainGold = Number(pu.trainGold);
   if (pu.piracyGold !== undefined) target.piracyGold = Number(pu.piracyGold);
@@ -26,12 +30,6 @@ export function applyStateUpdate(target: PlayerState, pu: PlayerUpdate): void {
   if (pu.traitorRemainingTicks !== undefined) {
     target.traitorRemainingTicks = Math.max(0, pu.traitorRemainingTicks);
   }
-  if (pu.inDoomsdayClock !== undefined)
-    target.inDoomsdayClock = pu.inDoomsdayClock;
-  if (pu.markedDoomsdayClockTick !== undefined) {
-    target.markedDoomsdayClockTick = pu.markedDoomsdayClockTick;
-  }
-  if (pu.isDecaying !== undefined) target.isDecaying = pu.isDecaying;
   if (pu.betrayals !== undefined) target.betrayals = pu.betrayals;
   if (pu.hasSpawned !== undefined) target.hasSpawned = pu.hasSpawned;
   if (pu.spawnTile !== undefined) target.spawnTile = pu.spawnTile;

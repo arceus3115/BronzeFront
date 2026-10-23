@@ -11,6 +11,7 @@ import {
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { findMinimumBy } from "@openfront/engine-lib/Util";
 import { z } from "zod";
+import { setArmyTroops } from "./ArmyExecution";
 import {
   Execution,
   Game,
@@ -32,15 +33,11 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
-import { ShellExecution } from "./ShellExecution";
-
 export class WarshipExecution implements Execution {
   private random: PseudoRandom;
   private warship: Unit;
   private mg: Game;
   private pathfinder: WaterPathFinder;
-  private lastShellAttack = 0;
-  private alreadySentShell = new Set<Unit>();
   private lastManualMoveTickRetreatDisabled = 0;
   private lastObservedPatrolTile: TileRef | undefined;
   private activeHealingRemainder = 0;
@@ -81,6 +78,8 @@ export class WarshipExecution implements Execution {
       this.warship.delete();
       return;
     }
+    this.melee();
+    this.unloadCargo();
     const isInCombat = this.warship.warshipState().isInCombat ?? false;
     if (this.lastEmittedCombat && !isInCombat) {
       this.warship.touch();
@@ -90,16 +89,6 @@ export class WarshipExecution implements Execution {
 
     this.healWarship();
     this.handleManualPatrolOverride();
-
-    // A doomed side cannot repair its navy (see healWarship), so retreating to
-    // a port only pulls a warship out of the fight to idle there forever. Undock
-    // or abort any retreat and keep patrolling until the side recovers.
-    if (
-      this.warship.owner().inDoomsdayClock() &&
-      this.warship.warshipState().state !== "patrolling"
-    ) {
-      this.cancelRepairRetreat();
-    }
 
     if (this.warship.warshipState().state === "docked") {
       if (this.currentRetreatPort() === undefined) {
@@ -152,10 +141,6 @@ export class WarshipExecution implements Execution {
 
   private healWarship(): void {
     const owner = this.warship.owner();
-    // A doomed side (below the Doomsday Clock bar) cannot repair its navy, so the
-    // decay in DoomsdayClockExecution actually sinks warships instead of being
-    // out-healed at a port. Inert when the mode is off: the mark is never set.
-    if (owner.inDoomsdayClock()) return;
     const passiveHealing = this.mg.config().warshipPassiveHealing();
     const passiveHealingRange = this.mg.config().warshipPassiveHealingRange();
     const passiveHealingRangeSquared =
@@ -194,11 +179,6 @@ export class WarshipExecution implements Execution {
     healthBeforeHealing = this.warship.health(),
   ): boolean {
     if (this.warship.warshipState().state !== "patrolling") {
-      return false;
-    }
-    // A doomed side cannot repair (see healWarship), so there is nothing to
-    // retreat for; stay on patrol instead of idling at a port.
-    if (this.warship.owner().inDoomsdayClock()) {
       return false;
     }
     const manualMoveRetreatDisabledDuration = 50;
@@ -259,7 +239,7 @@ export class WarshipExecution implements Execution {
 
   /**
    * Shared target selection: searches nearby units of given types,
-   * filters common exclusions (self, friendly, docked, already-shelled),
+   * filters common exclusions (self, friendly, docked),
    * picks best by type priority (lower index = higher priority) then distance.
    *
    * When `includeTradeShips` is true, applies trade-ship-specific filters
@@ -294,7 +274,6 @@ export class WarshipExecution implements Execution {
         unit === this.warship ||
         unit.owner() === owner ||
         !owner.canAttackPlayer(unit.owner(), true) ||
-        this.alreadySentShell.has(unit) ||
         (unit.type() === UnitType.Warship &&
           unit.warshipState().state === "docked")
       ) {
@@ -650,27 +629,46 @@ export class WarshipExecution implements Execution {
 
   private shootTarget() {
     this.warship.updateWarshipState({ isInCombat: true });
-    const shellAttackRate = this.mg.config().warshipShellAttackRate();
-    if (this.mg.ticks() - this.lastShellAttack > shellAttackRate) {
-      if (this.warship.targetUnit()?.type() !== UnitType.TransportShip) {
-        // Warships don't need to reload when attacking transport ships.
-        this.lastShellAttack = this.mg.ticks();
-      }
-      this.mg.addExecution(
-        new ShellExecution(
-          this.warship.tile(),
-          this.warship.owner(),
-          this.warship,
-          this.warship.targetUnit()!,
-        ),
-      );
-      if (!this.warship.targetUnit()!.hasHealth()) {
-        // Don't send multiple shells to target that can be oneshotted
-        this.alreadySentShell.add(this.warship.targetUnit()!);
-        this.warship.setTargetUnit(undefined);
-        return;
-      }
+  }
+
+  /** Drops carried troops as an army on adjacent friendly or empty land. */
+  private unloadCargo(): void {
+    const cargo = this.warship.warshipState().cargo ?? 0;
+    if (cargo <= 0) return;
+    for (const n of this.mg.neighbors(this.warship.tile())) {
+      if (!this.mg.isLand(n) || this.mg.isImpassable(n)) continue;
+      const owner = this.mg.owner(n);
+      if (owner.isPlayer() && owner !== this.warship.owner()) continue;
+      this.warship.updateWarshipState({ cargo: 0 });
+      const army = this.warship.owner().buildUnit(UnitType.Army, n, {
+        troops: 0,
+        targetTile: n,
+      });
+      setArmyTroops(army.id(), cargo);
+      return;
     }
+  }
+
+  /** Enemy warships and trade ships inside melee range lose health. */
+  private melee(): void {
+    if (this.warship === undefined || !this.warship.isActive()) return;
+    const range = this.mg.config().meleeRange();
+    const mul = this.warship.owner().hasBronzeWeapons() ? 4 / 3 : 1;
+    const damage = Math.round(5 * mul);
+    let hit = false;
+    for (const other of this.mg.nearbyUnits(this.warship.tile(), range, [
+      UnitType.Warship,
+      UnitType.TradeShip,
+    ])) {
+      if (other.distSquared > range * range) continue;
+      const unit = other.unit;
+      if (!unit.isActive() || unit === this.warship) continue;
+      if (unit.owner() === this.warship.owner()) continue;
+      if (this.warship.owner().isFriendly(unit.owner())) continue;
+      unit.modifyHealth(-damage, this.warship.owner());
+      hit = true;
+    }
+    this.warship.updateWarshipState({ isInCombat: hit });
   }
 
   private huntDownTradeShip() {
@@ -855,8 +853,6 @@ export class WarshipExecution implements Execution {
         this.pathfinder === undefined
           ? null
           : waterPathFinderState(this.pathfinder),
-      lastShellAttack: this.lastShellAttack,
-      alreadySentShell: [...this.alreadySentShell].map((u) => w.unit(u)),
       lastManualMoveTickRetreatDisabled: this.lastManualMoveTickRetreatDisabled,
       lastObservedPatrolTile: this.lastObservedPatrolTile,
       activeHealingRemainder: this.activeHealingRemainder,
@@ -875,8 +871,6 @@ export class WarshipExecution implements Execution {
     if (s.pathfinder !== null) {
       this.pathfinder = restoreWaterPathFinder(r.game, s.pathfinder);
     }
-    this.lastShellAttack = s.lastShellAttack;
-    this.alreadySentShell = new Set(s.alreadySentShell.map((i) => r.unit(i)));
     this.lastManualMoveTickRetreatDisabled =
       s.lastManualMoveTickRetreatDisabled;
     this.lastObservedPatrolTile = s.lastObservedPatrolTile;
@@ -896,9 +890,6 @@ const WarshipExecutionStateSchema = z.object({
   /** Null before init() or when the spawn failed. */
   warship: zRef().nullable(),
   pathfinder: WaterPathFinderSchema.nullable(),
-  lastShellAttack: zInt(),
-  /** In insertion order. */
-  alreadySentShell: z.array(zRef()),
   lastManualMoveTickRetreatDisabled: zInt(),
   lastObservedPatrolTile: zTile().optional(),
   activeHealingRemainder: zNum(),
@@ -908,7 +899,8 @@ type WarshipExecutionState = z.infer<typeof WarshipExecutionStateSchema>;
 
 export const WarshipExecutionSnapshot = execSnapshotType({
   name: "Warship",
-  version: 1,
+  version: 2,
+  migrations: { 1: (data) => data },
   schema: WarshipExecutionStateSchema,
   cls: () => WarshipExecution,
 });

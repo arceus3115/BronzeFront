@@ -3,7 +3,6 @@ import { TerraNullius } from "@openfront/engine-api/game/GameTypes";
 import { AllPlayersStats, ClientID } from "@openfront/engine-api/Schemas";
 import {
   BoatUnitType,
-  NukeType,
   OtherUnitType,
   PlayerStats,
 } from "@openfront/engine-api/StatsSchemas";
@@ -98,22 +97,9 @@ export interface Stats {
   boatCapturedTroops(player: Player, target: Player): void;
 
   // Player's boat was destroyed. Counts every destruction, including ones no
-  // one is credited with (the owner's own nuke, the owner being eliminated),
-  // so it is not the mirror of boatDestroyTrade/boatDestroyTroops.
+  // one is credited with (the owner being eliminated), so it is not the
+  // mirror of boatDestroyTrade/boatDestroyTroops.
   boatLose(player: Player, type: BoatUnitType): void;
-
-  // Player launches bomb at target
-  bombLaunch(
-    player: Player,
-    target: Player | TerraNullius,
-    type: NukeType,
-  ): void;
-
-  // Player's bomb lands at target
-  bombLand(player: Player, target: Player | TerraNullius, type: NukeType): void;
-
-  // Player's SAM intercepts a bomb from attacker
-  bombIntercept(player: Player, type: NukeType, count: number | bigint): void;
 
   // Player earns gold from conquering tiles or trade ships from captured
   goldWar(player: Player, captured: Player, gold: number | bigint): void;

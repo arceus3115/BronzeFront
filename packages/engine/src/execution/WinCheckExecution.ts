@@ -122,8 +122,8 @@ export class WinCheckExecution implements Execution {
     }
   }
 
-  // Hold more than the required share of non-fallout land, or outlast the
-  // lobby timer / hard limit.
+  // Hold more than the required share of land, or outlast the lobby timer /
+  // hard limit.
   private hasWon(tilesOwned: number): boolean {
     if (this.mg === null) throw new Error("Not initialized");
     const timeElapsed = this.mg.elapsedGameSeconds();
@@ -139,14 +139,12 @@ export class WinCheckExecution implements Execution {
     if (timeElapsed >= WinCheckExecution.HARD_TIME_LIMIT_SECONDS) {
       return true;
     }
-    const numTilesWithoutFallout =
-      this.mg.numLandTiles() - this.mg.numTilesWithFallout();
+    const numLandTiles = this.mg.numLandTiles();
     // Cross-multiplied: the threshold is a whole percentage, so this is
     // exact integer math.
     return (
       tilesOwned * 100 >
-      numTilesWithoutFallout *
-        this.mg.config().percentageTilesOwnedToWin(timeElapsed)
+      numLandTiles * this.mg.config().percentageTilesOwnedToWin(timeElapsed)
     );
   }
 

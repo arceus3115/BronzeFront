@@ -97,7 +97,7 @@ export class OvertimePanel extends LitElement {
     this.style.display = visible ? "block" : "none";
     if (!visible || !sd) return html``;
 
-    const land = this.game.numLandTiles() - this.game.numTilesWithFallout();
+    const land = this.game.numLandTiles();
     // The exact bar the sim checks — one shared formula, never re-derived
     // here. Always a whole percentage (see Config.percentageTilesOwnedToWin).
     const requiredPct = this.game.config().percentageTilesOwnedToWin(elapsed);

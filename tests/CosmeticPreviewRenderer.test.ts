@@ -209,7 +209,7 @@ describe("PreviewAnimationTicker", () => {
         "Factory",
       ]);
       expect(snapshot.units.length).toBe(7);
-      expect(snapshot.units.every((u) => u.unitType === "Train")).toBe(true);
+      expect(snapshot.units.every((u) => u.unitType === "Depot")).toBe(true);
       // Every car sits on the rails, at a distinct tile, one tick behind pos.
       const positions = new Set(snapshot.units.map((u) => u.pos));
       expect(positions.size).toBe(7);

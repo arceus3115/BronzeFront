@@ -10,10 +10,6 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { TeamCountConfig } from "@openfront/engine-api/Schemas";
 import {
-  DOOMSDAY_CLOCK_SPEEDS,
-  DoomsdayClockSpeed,
-} from "@openfront/engine-lib/game/DoomsdayClock";
-import {
   LitElement,
   SVGTemplateResult,
   TemplateResult,
@@ -113,12 +109,8 @@ const unitOptions: { type: UnitType; translationKey: string }[] = [
   { type: UnitType.Port, translationKey: "unit_type.port" },
   { type: UnitType.Warship, translationKey: "unit_type.warship" },
   { type: UnitType.TransportShip, translationKey: "unit_type.boat" },
-  { type: UnitType.MissileSilo, translationKey: "unit_type.missile_silo" },
-  { type: UnitType.SAMLauncher, translationKey: "unit_type.sam_launcher" },
-  { type: UnitType.AtomBomb, translationKey: "unit_type.atom_bomb" },
-  { type: UnitType.HydrogenBomb, translationKey: "unit_type.hydrogen_bomb" },
-  { type: UnitType.MIRV, translationKey: "unit_type.mirv" },
-  { type: UnitType.Factory, translationKey: "unit_type.factory" },
+  { type: UnitType.Farm, translationKey: "unit_type.farm" },
+  { type: UnitType.Mine, translationKey: "unit_type.mine" },
 ];
 
 const MAP_ICON = svg`<path
@@ -186,8 +178,6 @@ export interface ToggleOptionConfig {
   labelKey: string;
   checked: boolean;
   hidden?: boolean;
-  // When set, this toggle's card expands to a pace dropdown while it is checked.
-  doomsdayClockSpeed?: DoomsdayClockSpeed;
 }
 
 export interface GameConfigSettingsData {
@@ -278,11 +268,6 @@ export class GameConfigSettings extends LitElement {
     this.emit("difficulty-selected", { difficulty });
   };
 
-  private handleDoomsdayClockSpeedChange = (e: Event) => {
-    const speed = (e.target as HTMLSelectElement).value as DoomsdayClockSpeed;
-    this.emit("doomsday-clock-speed-selected", { speed });
-  };
-
   private handleGameModeSelect = (mode: GameMode) => {
     this.emit("game-mode-selected", { mode });
   };
@@ -322,57 +307,12 @@ export class GameConfigSettings extends LitElement {
   private renderOptionToggle(toggle: ToggleOptionConfig): TemplateResult {
     if (toggle.hidden) return html``;
 
-    if (toggle.doomsdayClockSpeed !== undefined) {
-      return this.renderDoomsdayClockToggle(toggle);
-    }
-
     return renderTextCardButton(
       translateText(toggle.labelKey),
       toggle.checked,
       () => this.handleOptionToggle(toggle),
       "p-4 text-center",
     );
-  }
-
-  // Same toggle card as the others, but when on it grows to hold the pace
-  // dropdown. The card toggles on click; the dropdown stops propagation so
-  // changing the pace doesn't flip the toggle.
-  private renderDoomsdayClockToggle(
-    toggle: ToggleOptionConfig,
-  ): TemplateResult {
-    const selected = toggle.doomsdayClockSpeed;
-    return html`
-      <div
-        class="${cardClass(
-          toggle.checked,
-          // Centered label; when checked the dropdown is added below it so the
-          // label shifts up and the dropdown is reachable.
-          "p-4 flex flex-col items-center justify-center gap-2 text-center",
-        )}"
-        @click=${() => this.handleOptionToggle(toggle)}
-      >
-        <span class="${CARD_LABEL_CLASS} ${stateTextClass(toggle.checked)}">
-          ${translateText(toggle.labelKey)}
-        </span>
-        ${toggle.checked
-          ? html`
-              <select
-                class="bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-white text-xs"
-                @click=${(e: Event) => e.stopPropagation()}
-                @change=${this.handleDoomsdayClockSpeedChange}
-              >
-                ${DOOMSDAY_CLOCK_SPEEDS.map(
-                  (speed) => html`
-                    <option value=${speed} ?selected=${selected === speed}>
-                      ${translateText(`doomsday_clock_speed.${speed}`)}
-                    </option>
-                  `,
-                )}
-              </select>
-            `
-          : nothing}
-      </div>
-    `;
   }
 
   private renderUnitTypeOptions(disabledUnits: UnitType[]): TemplateResult[] {

@@ -18,9 +18,6 @@ const warMetrics: readonly Metric[] = [
     type: RankType.ConquestBots,
     label: "game_info_modal.num_of_conquests_bots",
   },
-  { type: RankType.Atoms, label: "game_info_modal.atoms" },
-  { type: RankType.Hydros, label: "game_info_modal.hydros" },
-  { type: RankType.MIRV, label: "game_info_modal.mirv" },
 ];
 
 const economyMetrics: readonly Metric[] = [

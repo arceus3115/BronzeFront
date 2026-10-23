@@ -114,7 +114,7 @@ export class StreamingEncoder {
     }
     this.totalFrames++;
     // After encoding, so the terrain has this tick's changes.
-    this.events.push(frame, (ref) => this.frames.isLand(ref));
+    this.events.push(frame);
 
     if (this.chunkFrameOffsets.length >= this.base.keyframeInterval) {
       this.closeChunk();

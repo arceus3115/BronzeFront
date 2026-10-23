@@ -21,8 +21,6 @@ import type {
   DeadUnitFx,
   GhostPreviewData,
   NameEntry,
-  NukeTelegraphData,
-  NukeTrajectoryData,
   PlayerState,
   PlayerStatic,
   PlayerStatusData,
@@ -288,18 +286,6 @@ export class MapRenderer {
     this.renderer?.updateGhostPreview(data);
   }
 
-  // ---- Nuke UI ----
-
-  /** Update nuke trajectory preview arc. null = hide. */
-  updateNukeTrajectory(data: NukeTrajectoryData | null): void {
-    this.renderer?.updateNukeTrajectory(data);
-  }
-
-  /** Update in-flight nuke target telegraph circles. */
-  updateNukeTelegraphs(data: NukeTelegraphData[]): void {
-    this.renderer?.updateNukeTelegraphs(data);
-  }
-
   /** Update spawn phase overlay (tile highlights + breathing rings). */
   updateSpawnOverlay(inSpawnPhase: boolean, centers: SpawnCenter[]): void {
     this.renderer?.updateSpawnOverlay(inSpawnPhase, centers);
@@ -370,12 +356,6 @@ export class MapRenderer {
   /** Flash converging-chevron animation at a warship move target. */
   showMoveIndicator(tileX: number, tileY: number, ownerID: number): void {
     this.renderer?.showMoveIndicator(tileX, tileY, ownerID);
-  }
-
-  // ---- SAM radius ----
-
-  setSAMAllianceClusters(clusters: Map<number, number>): void {
-    this.renderer?.setSAMAllianceClusters(clusters);
   }
 
   // ---- Other ----

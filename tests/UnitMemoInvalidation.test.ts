@@ -162,53 +162,6 @@ describe("nearby() invalidation on raw water conversion", () => {
   });
 });
 
-// The memoised trade-ship pathfinder must answer exactly like a fresh query at
-// every moment across a REAL water conversion (queueWaterConversion -> the
-// WaterManager tick), including the up-to-20-tick window before the throttled
-// water-graph rebuild — a cached null must not outlive a component merge.
-describe("water-path memo across a real water conversion", () => {
-  test("memoized pathfinder always answers like a fresh one; the merge is eventually found", async () => {
-    const g = await setup("half_land_half_ocean", { waterNukes: true }, [
-      new PlayerInfo("player1", PlayerType.Human, "c1", "p1"),
-    ]);
-    const map = g.map();
-    const all: TileRef[] = [];
-    map.forEachTile((t) => all.push(t));
-    const ocean = all.filter((t) => map.isOcean(t) && map.isWater(t));
-    const convertible = (t: TileRef) =>
-      map.isLand(t) && !map.isImpassable(t) && !g.hasOwner(t);
-    // the land tile farthest from the ocean becomes a one-tile lake ...
-    const oceanDist = (t: TileRef) =>
-      Math.min(...ocean.map((o) => map.manhattanDist(o, t)));
-    const land = all.filter(convertible);
-    const lakeSeed = land.reduce((a, b) =>
-      oceanDist(a) >= oceanDist(b) ? a : b,
-    );
-    g.queueWaterConversion(lakeSeed);
-    g.executeNextTick();
-    expect(map.isWater(lakeSeed)).toBe(true);
-
-    const memoized = new WaterPathFinder(g, 0, true);
-    const fresh = new WaterPathFinder(g, 0, false);
-    const far = ocean.reduce((a, b) =>
-      map.manhattanDist(a, lakeSeed) >= map.manhattanDist(b, lakeSeed) ? a : b,
-    );
-    // warm the memo while the lake is landlocked: no path
-    expect(memoized.findPath(far, lakeSeed)).toBeNull();
-
-    // ... then the whole land half floods, merging the lake into the ocean
-    // (a thin corridor is not enough: the hierarchical pathfinder plans on the
-    // quarter-resolution minimap, whose cells only flip with area coverage)
-    for (const t of all) if (convertible(t)) g.queueWaterConversion(t);
-    for (let tick = 0; tick < 25; tick++) {
-      g.executeNextTick();
-      expect(memoized.findPath(far, lakeSeed)).toEqual(
-        fresh.findPath(far, lakeSeed),
-      );
-    }
-    expect(memoized.findPath(far, lakeSeed)).not.toBeNull();
-  });
-});
 
 // validStructureSpawnTiles() through its public entry (canBuild -> landBased-
 // StructureSpawn): the flood over connected owned tiles, the min-distance

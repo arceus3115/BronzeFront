@@ -122,7 +122,13 @@ export async function genTerrainFromBin(
   mapData: MapMetadata,
   data: Uint8Array,
 ): Promise<GameMap> {
-  if (data.length !== mapData.width * mapData.height) {
+  const tiles = mapData.width * mapData.height;
+  let terrain = data;
+  let biomes: Uint8Array | null = null;
+  if (data.length === tiles * 2) {
+    terrain = data.subarray(0, tiles);
+    biomes = data.subarray(tiles);
+  } else if (data.length !== tiles) {
     throw new Error(
       `Invalid data: buffer size ${data.length} incorrect for ${mapData.width}x${mapData.height} terrain plus 4 bytes for dimensions.`,
     );
@@ -131,7 +137,8 @@ export async function genTerrainFromBin(
   return new GameMapImpl(
     mapData.width,
     mapData.height,
-    data,
+    terrain,
     mapData.num_land_tiles,
+    biomes,
   );
 }

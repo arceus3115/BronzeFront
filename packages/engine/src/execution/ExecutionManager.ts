@@ -11,8 +11,13 @@ import { AllianceExtensionExecution } from "./alliance/AllianceExtensionExecutio
 import { AllianceRejectExecution } from "./alliance/AllianceRejectExecution";
 import { AllianceRequestExecution } from "./alliance/AllianceRequestExecution";
 import { BreakAllianceExecution } from "./alliance/BreakAllianceExecution";
+import { ArmyExecution, OrderArmyExecution } from "./ArmyExecution";
 import { AttackExecution } from "./AttackExecution";
-import { BoatRetreatExecution } from "./BoatRetreatExecution";
+import {
+  ExchangeExecution,
+  ResearchExecution,
+} from "./BronzeTechExecution";
+import { WarshipCargoExecution } from "./WarshipCargoExecution";
 import { ConstructionExecution } from "./ConstructionExecution";
 import { DeleteUnitExecution } from "./DeleteUnitExecution";
 import { DonateGoldExecution } from "./DonateGoldExecution";
@@ -29,7 +34,6 @@ import { QuickChatExecution } from "./QuickChatExecution";
 import { RetreatExecution } from "./RetreatExecution";
 import { SpawnExecution } from "./SpawnExecution";
 import { TargetPlayerExecution } from "./TargetPlayerExecution";
-import { TransportShipExecution } from "./TransportShipExecution";
 import { TribeSpawner } from "./TribeSpawner";
 import { UpgradeStructureExecution } from "./UpgradeStructureExecution";
 import { PlayerSpawner } from "./utils/PlayerSpawner";
@@ -67,17 +71,31 @@ export class Executor {
     // create execution
     switch (intent.type) {
       case "attack": {
-        return new AttackExecution(
-          intent.troops,
+        return new ArmyExecution(
           player,
-          intent.targetID,
-          null,
+          intent.troops,
+          intent.targetID ?? this.mg.terraNullius().id(),
         );
       }
+      case "order_army":
+        return new OrderArmyExecution(player, intent.unitId, intent.tile);
+      case "research":
+        return new ResearchExecution(player, intent.tech);
+      case "exchange":
+        return new ExchangeExecution(player, intent.direction, intent.amount);
+      case "warship_cargo":
+        return new WarshipCargoExecution(
+          player,
+          intent.unitId,
+          intent.action,
+          intent.amount,
+          intent.tile,
+        );
+      case "boat":
+      case "cancel_boat":
+        return new NoOpExecution();
       case "cancel_attack":
         return new RetreatExecution(player, intent.attackID);
-      case "cancel_boat":
-        return new BoatRetreatExecution(player, intent.unitID);
       case "move_warship":
         return new MoveWarshipExecution(player, intent.unitIds, intent.tile);
       case "spawn":
@@ -89,8 +107,6 @@ export class Executor {
           intent.tile,
           true,
         );
-      case "boat":
-        return new TransportShipExecution(player, intent.dst, intent.troops);
       case "allianceRequest":
         return new AllianceRequestExecution(player, intent.recipient);
       case "allianceReject":
@@ -114,13 +130,7 @@ export class Executor {
       case "embargo_all":
         return new EmbargoAllExecution(player, intent.action);
       case "build_unit":
-        return new ConstructionExecution(
-          player,
-          intent.unit,
-          intent.tile,
-          intent.rocketDirectionUp,
-          intent.amount,
-        );
+        return new ConstructionExecution(player, intent.unit, intent.tile);
       case "allianceExtension": {
         return new AllianceExtensionExecution(player, intent.recipient);
       }

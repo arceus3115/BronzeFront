@@ -66,6 +66,11 @@ export interface PlayerState {
   deathPosition: number | null;
   tilesOwned: number;
   gold: number;
+  /** Food delivered by depots that left a farm. */
+  food: number;
+  science: number;
+  bronzeWeapons: boolean;
+  markets: boolean;
   /** Cumulative ship-trade revenue (live, from PlayerUpdate). */
   tradeGold: number;
   /** Cumulative train revenue: own trains + external stops (live). */
@@ -77,9 +82,6 @@ export interface PlayerState {
   troops: number;
   isTraitor: boolean;
   traitorRemainingTicks: number;
-  inDoomsdayClock: boolean;
-  isDecaying: boolean;
-  markedDoomsdayClockTick: number;
   betrayals: number;
   hasSpawned: boolean;
   /** TileRef the player picked as their spawn (undefined if not yet spawned). */
@@ -106,24 +108,18 @@ export interface UnitState {
   reachedTarget: boolean;
   retreating: boolean;
   targetable: boolean;
-  waitTicks: number;
   markedForDeletion: number | false; // -1 -> false, else tick
   health: number | null;
   underConstruction: boolean;
   targetUnitId: number | null;
   targetTile: number | null;
   troops: number;
-  missileTimerQueue: number[];
   level: number;
   veterancy: number;
   hasTrainStation: boolean;
   trainType: number | null; // 0=Engine, 1=TailEngine, 2=Carriage
   loaded: boolean | null;
   constructionStartTick: number | null;
-  samUpgradeStartTick: number | null;
-  samUpgradeStartRange: number | null;
-  samUpgradeTargetLevel: number | null;
-  samUpgradeDuration: number | null;
 }
 
 /** Minimal dead-unit data needed by the FX pass. */
@@ -211,12 +207,6 @@ export interface PlayerStatusData {
   allianceReq: boolean;
   target: boolean;
   embargo: boolean;
-  nukeActive: boolean;
-  nukeTargetsMe: boolean;
-  inDoomsdayClock: boolean;
-  doomsdayClockDraining: boolean;
-  doomsdayClockDecaying: boolean;
-  doomsdayClockWarnProgress: number;
   traitorRemainingTicks: number;
   allianceFraction: number;
   allianceRemainingTicks: number;
@@ -245,27 +235,8 @@ export interface GhostPreviewData {
   upgradeTargetTile: number | null;
   /** Range radius in tiles for the placement circle (0 = no circle). */
   rangeRadius: number;
-  /** True if placing here would carry a penalty (e.g. nuking an ally → traitor). */
+  /** True if placing here would carry a penalty. */
   rangeWarning: boolean;
-}
-
-/** Nuke trajectory preview data — Bezier control points + color thresholds. */
-export interface NukeTrajectoryData {
-  /** Bezier control points (world-space tile coordinates). */
-  p0x: number;
-  p0y: number;
-  p1x: number;
-  p1y: number;
-  p2x: number;
-  p2y: number;
-  p3x: number;
-  p3y: number;
-  /** t-value (0..1) where bomb leaves source's targetable range. -1 if ranges overlap. */
-  tUntargetableStart: number;
-  /** t-value (0..1) where bomb enters target's targetable range. -1 if ranges overlap. */
-  tUntargetableEnd: number;
-  /** t-value (0..1) of first SAM intercept point. 1.0 = no intercept. */
-  tSamIntercept: number;
 }
 
 /**
@@ -286,16 +257,6 @@ export interface AttackRingInput {
   x: number;
   y: number;
   unitId: number;
-}
-
-/** In-flight nuke target circle data. */
-export interface NukeTelegraphData {
-  x: number;
-  y: number;
-  innerRadius: number;
-  outerRadius: number;
-  /** Launcher vs local player: 0 = self, 1 = ally/teammate, 2 = enemy. */
-  relation: number;
 }
 
 /** Lean config for constructing the GPU renderer — no replay-specific fields. */

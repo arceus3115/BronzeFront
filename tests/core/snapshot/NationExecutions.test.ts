@@ -136,7 +136,6 @@ describe("nation and tribe snapshots", () => {
     }
     // The scenario reached the interesting states.
     expect(unitCount(game, UnitType.Port)).toBeGreaterThan(0);
-    expect(unitCount(game, UnitType.MissileSilo)).toBeGreaterThan(0);
     expect(unitCount(game, UnitType.Warship)).toBeGreaterThan(0);
     expect(game.allPlayers().some((p) => !p.isAlive())).toBe(true);
   }, 300_000);

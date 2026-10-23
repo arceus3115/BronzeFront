@@ -40,10 +40,6 @@ const leaf: PlayerStatsLeaf = {
   stats: {
     attacks: [10_000n, 4_000n, 500n],
     conquests: [10n, 5n, 2n],
-    bombs: {
-      abomb: [5n, 4n, 1n],
-      hbomb: [5n, 3n, 2n],
-    },
     gold: [100n, 200n, 300n, 400n, 500n, 600n],
     boats: {
       trans: [20n, 15n, 2n, 3n],
@@ -51,7 +47,7 @@ const leaf: PlayerStatsLeaf = {
     },
     units: {
       city: [10n, 1n, 2n, 3n],
-      fact: [4n, 0n, 0n, 0n],
+      farm: [4n, 0n, 0n, 0n],
       defp: [3n, 0n, 0n, 0n],
       port: [5n, 0n, 0n, 1n],
       wshp: [7n, 2n, 1n, 4n],
@@ -132,8 +128,12 @@ describe("PlayerStatsSummary", () => {
           value: "1.0",
         },
         {
-          key: "factories",
+          key: "farms",
           value: "0.8",
+        },
+        {
+          key: "mines",
+          value: "0.0",
         },
         {
           key: "defensePosts",
@@ -164,10 +164,6 @@ describe("PlayerStatsSummary", () => {
           value: "800",
         },
         {
-          key: "nukes",
-          value: "2.0",
-        },
-        {
           key: "warships",
           value: "1.4",
         },
@@ -191,7 +187,7 @@ describe("PlayerStatsSummary", () => {
     });
   });
 
-  it("renders sixteen gameplay cards as 4x4 on desktop", async () => {
+  it("renders sixteen gameplay cards on desktop", async () => {
     const summary = document.createElement(
       "player-stats-summary",
     ) as PlayerStatsSummary;
@@ -271,7 +267,6 @@ describe("PlayerStatsSummary", () => {
     expect(unitIcon?.getAttribute("aria-hidden")).toBe("true");
     expect(unitIcon?.getAttribute("alt")).toBe("");
 
-    // Four family rows, each four tiles.
     expect(
       Array.from(summary.querySelectorAll("[data-metric-group]")).map((group) =>
         group.getAttribute("data-metric-group"),
@@ -282,9 +277,11 @@ describe("PlayerStatsSummary", () => {
       "player_stats_tree.stats_group_combat",
       "player_stats_tree.stats_group_gold",
     ]);
-    for (const group of summary.querySelectorAll("[data-metric-group]")) {
-      expect(group.querySelectorAll("[data-stat]")).toHaveLength(4);
-    }
+    expect(
+      Array.from(summary.querySelectorAll("[data-metric-group]")).map(
+        (group) => group.querySelectorAll("[data-stat]").length,
+      ),
+    ).toEqual([5, 4, 3, 4]);
 
     // The heading names the family and the icon names the unit, so the
     // visible label is only what tells a tile from its neighbours.
@@ -297,7 +294,7 @@ describe("PlayerStatsSummary", () => {
     ).toContain("player_stats_tree.stats_transports_landed_short");
 
     // Every building tile reads "Built" — the icon is what says which.
-    for (const stat of ["cities", "ports", "factories", "defensePosts"]) {
+    for (const stat of ["cities", "ports", "farms", "mines", "defensePosts"]) {
       expect(
         summary.querySelector(`[data-stat="${stat}"] [data-label]`)
           ?.textContent,
@@ -377,11 +374,8 @@ describe("PlayerStatsSummary", () => {
     expect(
       summary.querySelector('[data-stat="othersTrainGold"]')?.textContent,
     ).toContain("120");
-    expect(summary.querySelector('[data-stat="nukes"]')?.textContent).toContain(
-      "2.0",
-    );
     expect(
-      summary.querySelector('[data-stat="factories"]')?.textContent,
+      summary.querySelector('[data-stat="farms"]')?.textContent,
     ).toContain("0.8");
     expect(
       summary.querySelector('[data-stat="transports"]')?.textContent,

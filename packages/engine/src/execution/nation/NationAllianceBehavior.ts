@@ -131,7 +131,7 @@ export class NationAllianceBehavior {
       return false;
     }
     // Reject if otherPlayer has allied with a lot of players (Hard and Impossible only)
-    // To make sure there are enough non-friendly players in the game to stop the crown with nukes
+    // To make sure there are enough non-friendly players in the game to stop the crown
     if (this.hasTooManyAlliances(otherPlayer)) {
       return false;
     }
@@ -421,7 +421,7 @@ export class NationAllianceBehavior {
 
     const { difficulty } = this.game.config().gameConfig();
 
-    // Betray our juiciest ally (e.g. a MIRVed one), if it's safe to do so (everybody around us is weak)
+    // Betray our juiciest ally, if it's safe to do so (everybody around us is weak)
     if (
       (difficulty === Difficulty.Hard ||
         difficulty === Difficulty.Impossible) &&

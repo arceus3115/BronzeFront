@@ -410,7 +410,6 @@ export class PlayerStatsTreeView extends LitElement {
       killedAt: this.mergeStatValue(base.killedAt, next.killedAt),
       conquests: this.mergeStatArrays(base.conquests, next.conquests),
       boats: this.mergeStatRecord(base.boats, next.boats),
-      bombs: this.mergeStatRecord(base.bombs, next.bombs),
       gold: this.mergeStatArrays(base.gold, next.gold),
       units: this.mergeStatRecord(base.units, next.units),
     };
@@ -469,7 +468,6 @@ export class PlayerStatsTreeView extends LitElement {
       killedAt: stats.killedAt,
       conquests: stats.conquests ? [...stats.conquests] : undefined,
       boats: stats.boats ? { ...stats.boats } : undefined,
-      bombs: stats.bombs ? { ...stats.bombs } : undefined,
       gold: stats.gold ? [...stats.gold] : undefined,
       units: stats.units ? { ...stats.units } : undefined,
     };

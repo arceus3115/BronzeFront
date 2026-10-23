@@ -13,7 +13,9 @@ import {
   UT_CITY,
   UT_DEFENSE_POST,
   UT_FACTORY,
+  UT_FARM,
   UT_HYDROGEN_BOMB,
+  UT_MINE,
   UT_MIRV,
   UT_MIRV_WARHEAD,
   UT_MISSILE_SILO,
@@ -46,6 +48,8 @@ const LIGHT_CONFIGS: Record<string, LightConfig> = {
   [UT_CITY]: { r: 1.0, g: 0.85, b: 0.5, radius: 18, intensity: 1.2 },
   [UT_PORT]: { r: 1.0, g: 0.75, b: 0.4, radius: 18, intensity: 1.2 },
   [UT_FACTORY]: { r: 1.0, g: 0.6, b: 0.3, radius: 18, intensity: 1.2 },
+  [UT_MINE]: { r: 1.0, g: 0.6, b: 0.3, radius: 18, intensity: 1.2 },
+  [UT_FARM]: { r: 0.7, g: 1.0, b: 0.4, radius: 18, intensity: 1.2 },
   [UT_DEFENSE_POST]: { r: 0.8, g: 0.85, b: 1.0, radius: 18, intensity: 1.2 },
   [UT_SAM_LAUNCHER]: { r: 0.8, g: 0.85, b: 1.0, radius: 18, intensity: 1.2 },
   [UT_MISSILE_SILO]: { r: 1.0, g: 0.4, b: 0.2, radius: 18, intensity: 1.2 },
@@ -188,7 +192,7 @@ export class PointLightPass {
     this.lastUnitsUpdateMs = performance.now();
 
     for (const unit of units.values()) {
-      if (!unit.isActive || unit.waitTicks > 0) continue;
+      if (!unit.isActive) continue;
       const typeIdx = this.typeToIdx.get(unit.unitType);
       if (typeIdx === undefined) continue;
       const cfg = this.typeConfigs[typeIdx];

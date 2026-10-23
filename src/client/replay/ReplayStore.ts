@@ -45,8 +45,7 @@ export interface StoredMeta {
 }
 
 /**
- * A replay as it's kept: ReplayData with its nuke impacts and dead units
- * packed and gzipped.
+ * A replay as it's kept: ReplayData with its dead units packed and gzipped.
  */
 export interface StoredReplay {
   base: ReplayData["base"];
@@ -60,8 +59,8 @@ export async function toStored(
   replay: ReplayData,
   gzip: GzipFn = gzipInBrowser,
 ): Promise<StoredReplay> {
-  const { nukeImpacts, deadUnitEvents, ...events } = replay.append.events;
-  const packed = packEvents({ nukeImpacts, deadUnitEvents });
+  const { deadUnitEvents, ...events } = replay.append.events;
+  const packed = packEvents({ deadUnitEvents });
   return {
     base: replay.base,
     append: { ...replay.append, events, packedEvents: await gzip(packed) },

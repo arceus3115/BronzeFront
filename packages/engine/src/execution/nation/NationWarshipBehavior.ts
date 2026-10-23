@@ -265,7 +265,7 @@ export class NationWarshipBehavior {
     enemy: Player,
     reason: "trade" | "transport",
   ): void {
-    // Don't retaliate against ourselves (e.g. own nuke destroyed own ship)
+    // Don't retaliate against ourselves
     if (enemy === this.player) {
       return;
     }

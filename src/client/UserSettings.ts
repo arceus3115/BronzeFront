@@ -19,18 +19,15 @@ import { isDesktopShell } from "./DesktopShell";
 
 export function getDefaultKeybinds(isMac: boolean): Record<string, string> {
   return {
-    toggleView: "Space",
+    toggleView: "KeyV",
+    influence: "Space",
     coordinateGrid: "KeyM",
     buildCity: "Digit1",
-    buildFactory: "Digit2",
+    buildFarm: "Digit2",
+    buildMine: "Digit5",
     buildPort: "Digit3",
     buildDefensePost: "Digit4",
-    buildMissileSilo: "Digit5",
-    buildSamLauncher: "Digit6",
     buildWarship: "Digit7",
-    buildAtomBomb: "Digit8",
-    buildHydrogenBomb: "Digit9",
-    buildMIRV: "Digit0",
     attackRatioDown: "KeyT",
     attackRatioUp: "KeyY",
     boatAttack: "KeyB",
@@ -41,7 +38,6 @@ export function getDefaultKeybinds(isMac: boolean): Record<string, string> {
     targetPlayer: "KeyN",
     emojiMenu: "KeyF",
     quickChat: "KeyR",
-    swapDirection: "KeyU",
     zoomOut: "KeyQ",
     zoomIn: "KeyE",
     zoomOutMinus: "Minus",
@@ -573,21 +569,6 @@ export class UserSettings {
 
   toggleHalloweenTheme() {
     this.setBool(HALLOWEEN_THEME_KEY, !this.halloweenTheme());
-  }
-
-  nukeAllianceSafetyDuration(): number {
-    const raw = this.getCached("settings.nukeAllianceSafetyDuration");
-    if (raw === null || raw.trim() === "") return 5;
-    const val = Number(raw);
-    if (!Number.isInteger(val) || val < 0 || val > 30) {
-      return 5;
-    }
-    return val;
-  }
-
-  setNukeAllianceSafetyDuration(duration: number) {
-    const val = Math.max(0, Math.min(30, Math.round(duration)));
-    this.setCached("settings.nukeAllianceSafetyDuration", val.toString());
   }
 
   // For development only. Used for testing patterns, set in the console manually.

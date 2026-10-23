@@ -1,12 +1,14 @@
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
 import { Cell, TerrainType } from "@openfront/engine-api/game/GameTypes";
+import { fallbackBiome } from "./Biome";
 import { z } from "zod";
 import { snapshotType, zBytes, zInt, zTiles } from "../snapshot/SnapshotType";
 
 export class GameMapImpl implements GameMap {
-  private _numTilesWithFallout = 0;
-
   private readonly terrain: Uint8Array; // Immutable terrain data
+  // Stored biome byte per tile, or null when the map file has no layer.
+  // 255 means "derive from elevation".
+  private biomes: Uint8Array | null;
   private readonly state: Uint16Array; // Mutable game state
   private readonly width_: number;
   private readonly height_: number;
@@ -24,22 +26,21 @@ export class GameMapImpl implements GameMap {
   private static readonly OCEAN_BIT = 5;
   private static readonly MAGNITUDE_MASK = 0x1f; // 11111 in binary
   // Land tiles with magnitude == IMPASSABLE_MAGNITUDE are impassable terrain:
-  // solid ground that cannot be owned, attacked, or nuked, and that nuke
-  // trajectories cannot cross. Rendered as the map background colour so the
-  // map appears non-rectangular.
+  // solid ground that cannot be owned or attacked. Rendered as the map
+  // background colour so the map appears non-rectangular.
   private static readonly IMPASSABLE_MAGNITUDE = 31;
 
   // State bits (Uint16Array)
   private static readonly PLAYER_ID_MASK = 0xfff;
-  private static readonly FALLOUT_BIT = 13;
   private static readonly DEFENSE_BONUS_BIT = 14;
-  // Bit 15 still reserved
+  // Bits 13 and 15 still reserved
 
   constructor(
     width: number,
     height: number,
     terrainData: Uint8Array,
     private numLandTiles_: number,
+    biomes: Uint8Array | null = null,
   ) {
     if (terrainData.length !== width * height) {
       throw new Error(
@@ -49,14 +50,12 @@ export class GameMapImpl implements GameMap {
     this.width_ = width;
     this.height_ = height;
     this.terrain = terrainData;
+    this.biomes = biomes;
     this.state = new Uint16Array(width * height);
     this.yToRef = new Int32Array(height);
     for (let y = 0; y < height; y++) {
       this.yToRef[y] = y * width;
     }
-  }
-  numTilesWithFallout(): number {
-    return this._numTilesWithFallout;
   }
 
   ref(x: number, y: number): TileRef {
@@ -152,7 +151,7 @@ export class GameMapImpl implements GameMap {
     return this.waterVersion_;
   }
 
-  // Original terrain byte of every tile whose terrain changed (water nukes),
+  // Original terrain byte of every tile whose terrain changed,
   // in first-edit order. Lets a snapshot store terrain as a diff against the
   // map file and verify the file it will be restored onto is the same one.
   private pristineTerrain: Map<TileRef, number> | null = null;
@@ -218,25 +217,6 @@ export class GameMapImpl implements GameMap {
       (this.state[ref] & ~GameMapImpl.PLAYER_ID_MASK) | playerId;
   }
 
-  hasFallout(ref: TileRef): boolean {
-    return Boolean(this.state[ref] & (1 << GameMapImpl.FALLOUT_BIT));
-  }
-
-  setFallout(ref: TileRef, value: boolean): void {
-    const existingFallout = this.hasFallout(ref);
-    if (value) {
-      if (!existingFallout) {
-        this._numTilesWithFallout++;
-        this.state[ref] |= 1 << GameMapImpl.FALLOUT_BIT;
-      }
-    } else {
-      if (existingFallout) {
-        this._numTilesWithFallout--;
-        this.state[ref] &= ~(1 << GameMapImpl.FALLOUT_BIT);
-      }
-    }
-  }
-
   // True when the tile touches the map boundary or an impassable tile.
   // Impassable terrain acts like the map edge for enclosure checks: a
   // cluster hugging it cannot be "surrounded" from that side.
@@ -295,15 +275,27 @@ export class GameMapImpl implements GameMap {
   // if updating these magnitude values, also update
   // `../../../map-generator/map_generator.go` `getThumbnailColor`
   terrainType(ref: TileRef): TerrainType {
-    if (this.isLand(ref)) {
-      const magnitude = this.magnitude(ref);
-      if (magnitude >= GameMapImpl.IMPASSABLE_MAGNITUDE)
-        return TerrainType.Impassable;
-      if (magnitude < 10) return TerrainType.Plains;
-      if (magnitude < 20) return TerrainType.Highland;
-      return TerrainType.Mountain;
+    return this.biome(ref);
+  }
+
+  biome(ref: TileRef): TerrainType {
+    if (this.biomes !== null) {
+      const stored = this.biomes[ref];
+      if (stored !== 255) return stored as TerrainType;
     }
-    return TerrainType.Ocean;
+    return fallbackBiome(
+      this.isLand(ref),
+      this.isShoreline(ref),
+      this.magnitude(ref),
+    );
+  }
+
+  setBiome(ref: TileRef, biome: TerrainType): void {
+    if (this.biomes === null) {
+      this.biomes = new Uint8Array(this.width_ * this.height_);
+      this.biomes.fill(255);
+    }
+    this.biomes[ref] = biome;
   }
 
   neighbors(ref: TileRef): TileRef[] {
@@ -468,22 +460,14 @@ export class GameMapImpl implements GameMap {
 
   /**
    * Update a tile from a packed uint32:
-   *   bits  0-15: tile state (owner, fallout, etc.)
+   *   bits  0-15: tile state (owner, defense bonus)
    *   bits 16-23: terrain byte (land, ocean, shoreline, magnitude)
    */
   updateTile(tile: TileRef, packed: number): boolean {
     const state = packed & 0xffff;
     const terrainByte = (packed >>> 16) & 0xff;
 
-    const existingFallout = this.hasFallout(tile);
     this.state[tile] = state;
-    const newFallout = this.hasFallout(tile);
-    if (existingFallout && !newFallout) {
-      this._numTilesWithFallout--;
-    }
-    if (!existingFallout && newFallout) {
-      this._numTilesWithFallout++;
-    }
 
     // Update terrain if the packed value includes a terrain byte that differs
     const terrainChanged = this.terrain[tile] !== terrainByte;
@@ -529,21 +513,17 @@ export class GameMapImpl implements GameMap {
   }
 
   /**
-   * Terrain as a diff against the map file, plus fallout and defense bits.
+   * Terrain as a diff against the map file, plus defense-bonus bits.
    * Owner bits are not stored: every player's ordered tile list already says
    * who owns what, and restore writes them from there.
    */
   snapshot(): GameMapState {
     const edits = [...(this.pristineTerrain ?? new Map<TileRef, number>())];
-    const fallout: TileRef[] = [];
     const defense: TileRef[] = [];
-    const falloutMask = 1 << GameMapImpl.FALLOUT_BIT;
     const defenseMask = 1 << GameMapImpl.DEFENSE_BONUS_BIT;
     const state = this.state;
     for (let i = 0; i < state.length; i++) {
-      const v = state[i];
-      if (v & falloutMask) fallout.push(i);
-      if (v & defenseMask) defense.push(i);
+      if (state[i] & defenseMask) defense.push(i);
     }
     return {
       width: this.width_,
@@ -552,11 +532,9 @@ export class GameMapImpl implements GameMap {
       editTiles: Uint32Array.from(edits, ([ref]) => ref),
       editOriginal: Uint8Array.from(edits, ([, orig]) => orig),
       editCurrent: Uint8Array.from(edits, ([ref]) => this.terrain[ref]),
-      fallout: Uint32Array.from(fallout),
       defense: Uint32Array.from(defense),
       numLandTiles: this.numLandTiles_,
       waterVersion: this.waterVersion_,
-      numTilesWithFallout: this._numTilesWithFallout,
     };
   }
 
@@ -582,20 +560,18 @@ export class GameMapImpl implements GameMap {
       this.noteTerrainEdit(ref);
       this.terrain[ref] = s.editCurrent[i];
     });
-    for (const ref of s.fallout)
-      this.state[ref] |= 1 << GameMapImpl.FALLOUT_BIT;
     for (const ref of s.defense) {
       this.state[ref] |= 1 << GameMapImpl.DEFENSE_BONUS_BIT;
     }
     this.numLandTiles_ = s.numLandTiles;
     this.waterVersion_ = s.waterVersion;
-    this._numTilesWithFallout = s.numTilesWithFallout;
   }
 }
 
 export const GameMapSnapshot = snapshotType({
   name: "GameMap",
-  version: 1,
+  version: 2,
+  migrations: { 1: (data) => data },
   schema: z.object({
     width: zInt(),
     height: zInt(),
@@ -603,11 +579,9 @@ export const GameMapSnapshot = snapshotType({
     editTiles: zTiles(),
     editOriginal: zBytes(),
     editCurrent: zBytes(),
-    fallout: zTiles(),
     defense: zTiles(),
     numLandTiles: zInt(),
     waterVersion: zInt(),
-    numTilesWithFallout: zInt(),
   }),
 });
 

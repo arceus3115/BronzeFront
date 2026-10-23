@@ -121,8 +121,6 @@ function expectOnTrack(runner: GameRunner, ref: Reference): void {
 
 const VARIANTS: [string, Partial<GameConfig>][] = [
   ["free for all", {}],
-  // Water nukes rewrite terrain and the water graph mid-game.
-  ["water nukes", { waterNukes: true }],
   ["teams", { gameMode: GameMode.Team, playerTeams: 2 }],
 ];
 

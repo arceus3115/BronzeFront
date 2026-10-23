@@ -89,7 +89,6 @@ export function scriptedGameStart(
       infiniteTroops: false,
       instantBuild: false,
       randomSpawn: false,
-      doomsdayClock: { enabled: true, speed: "veryfast" },
       ...overrides,
     },
     players: SCRIPTED_HUMANS.map((clientID, i) => ({
@@ -270,10 +269,8 @@ function randomOwnedTile(rand: PseudoRandom, p: Player): TileRef | null {
 const STRUCTURES = [
   UnitType.City,
   UnitType.Port,
-  UnitType.Factory,
+  UnitType.Mine,
   UnitType.DefensePost,
-  UnitType.SAMLauncher,
-  UnitType.MissileSilo,
 ] as const;
 
 function playIntent(game: Game, p: Player, rand: PseudoRandom): Intent | null {
@@ -339,33 +336,8 @@ function playIntent(game: Game, p: Player, rand: PseudoRandom): Intent | null {
       }
       return { type: "build_unit", unit: UnitType.Warship, tile: water };
     }
-    case 8: {
-      if (own([UnitType.MissileSilo]).length === 0 || other === null) {
-        return null;
-      }
-      const unit = pick(rand, [
-        UnitType.AtomBomb,
-        UnitType.HydrogenBomb,
-        UnitType.MIRV,
-      ])!;
-      // Half the bombs fly at an enemy SAM, so SAMs get to shoot
-      const sam = rand.chance(2)
-        ? pick(
-            rand,
-            game
-              .units(UnitType.SAMLauncher)
-              .filter((s) => !p.isFriendly(s.owner(), true)),
-          )
-        : null;
-      const tile = sam?.tile() ?? randomOwnedTile(rand, other);
-      if (tile === null || p.canBuild(unit, tile) === false) return null;
-      return {
-        type: "build_unit",
-        unit,
-        tile,
-        rocketDirectionUp: rand.chance(2),
-      };
-    }
+    case 8:
+      return null;
     case 9: {
       const s = pick(rand, own([...STRUCTURES]));
       if (s === null) return null;

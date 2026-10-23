@@ -33,9 +33,6 @@ describe("RankingControls", () => {
       RankType.ConquestHumans,
       RankType.ConquestNations,
       RankType.ConquestBots,
-      RankType.Atoms,
-      RankType.Hydros,
-      RankType.MIRV,
     ]);
     expect(metrics[0].getAttribute("aria-pressed")).toBe("true");
     expect(

@@ -19,9 +19,8 @@ export const COLUMN_IDS = [
   // Buildings & units.
   "cities",
   "ports",
-  "factories",
-  "silos",
-  "sams",
+  "farms",
+  "mines",
   "warships",
   // Diplomacy.
   "allies",

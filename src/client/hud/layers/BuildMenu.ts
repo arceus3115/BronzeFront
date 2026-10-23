@@ -28,14 +28,10 @@ import { UIState } from "../../UIState";
 import { GameView } from "../../view";
 const warshipIcon = assetUrl("images/BattleshipIconWhite.svg");
 const cityIcon = assetUrl("images/CityIconWhite.svg");
-const factoryIcon = assetUrl("images/FactoryIconWhite.svg");
+const mineIcon = assetUrl("images/FactoryIconWhite.svg");
+const farmIcon = assetUrl("images/FarmIconWhite.svg");
 const goldCoinIcon = assetUrl("images/GoldCoinIcon.svg");
-const mirvIcon = assetUrl("images/MIRVIcon.svg");
-const missileSiloIcon = assetUrl("images/MissileSiloIconWhite.svg");
-const hydrogenBombIcon = assetUrl("images/MushroomCloudIconWhite.svg");
-const atomBombIcon = assetUrl("images/NukeIconWhite.svg");
 const portIcon = assetUrl("images/PortIcon.svg");
-const samlauncherIcon = assetUrl("images/SamLauncherIconWhite.svg");
 const shieldIcon = assetUrl("images/ShieldIconWhite.svg");
 
 export interface BuildItemDisplay {
@@ -49,27 +45,6 @@ export interface BuildItemDisplay {
 export const buildTable: BuildItemDisplay[][] = [
   [
     {
-      unitType: UnitType.AtomBomb,
-      icon: atomBombIcon,
-      description: "build_menu.desc.atom_bomb",
-      key: "unit_type.atom_bomb",
-      countable: false,
-    },
-    {
-      unitType: UnitType.MIRV,
-      icon: mirvIcon,
-      description: "build_menu.desc.mirv",
-      key: "unit_type.mirv",
-      countable: false,
-    },
-    {
-      unitType: UnitType.HydrogenBomb,
-      icon: hydrogenBombIcon,
-      description: "build_menu.desc.hydrogen_bomb",
-      key: "unit_type.hydrogen_bomb",
-      countable: false,
-    },
-    {
       unitType: UnitType.Warship,
       icon: warshipIcon,
       description: "build_menu.desc.warship",
@@ -81,20 +56,6 @@ export const buildTable: BuildItemDisplay[][] = [
       icon: portIcon,
       description: "build_menu.desc.port",
       key: "unit_type.port",
-      countable: true,
-    },
-    {
-      unitType: UnitType.MissileSilo,
-      icon: missileSiloIcon,
-      description: "build_menu.desc.missile_silo",
-      key: "unit_type.missile_silo",
-      countable: true,
-    },
-    {
-      unitType: UnitType.SAMLauncher,
-      icon: samlauncherIcon,
-      description: "build_menu.desc.sam_launcher",
-      key: "unit_type.sam_launcher",
       countable: true,
     },
     {
@@ -112,10 +73,17 @@ export const buildTable: BuildItemDisplay[][] = [
       countable: true,
     },
     {
-      unitType: UnitType.Factory,
-      icon: factoryIcon,
-      description: "build_menu.desc.factory",
-      key: "unit_type.factory",
+      unitType: UnitType.Farm,
+      icon: farmIcon,
+      description: "build_menu.desc.farm",
+      key: "unit_type.farm",
+      countable: true,
+    },
+    {
+      unitType: UnitType.Mine,
+      icon: mineIcon,
+      description: "build_menu.desc.mine",
+      key: "unit_type.mine",
       countable: true,
     },
   ],
@@ -391,13 +359,8 @@ export class BuildMenu extends LitElement implements Controller {
         ),
       );
     } else if (buildableUnit.canBuild) {
-      const rocketDirectionUp =
-        buildableUnit.type === UnitType.AtomBomb ||
-        buildableUnit.type === UnitType.HydrogenBomb
-          ? this.uiState.rocketDirectionUp
-          : undefined;
       this.eventBus.emit(
-        new BuildUnitIntentEvent(buildableUnit.type, tile, rocketDirectionUp),
+        new BuildUnitIntentEvent(buildableUnit.type, tile),
       );
     }
     this.hideMenu();

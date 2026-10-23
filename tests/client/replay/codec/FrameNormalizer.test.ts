@@ -31,9 +31,6 @@ describe("FrameNormalizer", () => {
         updates: {
           [P]: [
             partialPlayer(1, {
-              inDoomsdayClock: true,
-              isDecaying: true,
-              markedDoomsdayClockTick: 2,
               killedBy: "client2",
             }),
           ],
@@ -42,9 +39,6 @@ describe("FrameNormalizer", () => {
     );
     const p1 = f2.players.get(1)!;
     expect(p1).toMatchObject({
-      inDoomsdayClock: true,
-      isDecaying: true,
-      markedDoomsdayClockTick: 2,
       killedBy: "client2",
       // Fields absent from the diff keep their previous values.
       tilesOwned: 10,
@@ -54,7 +48,7 @@ describe("FrameNormalizer", () => {
     expect(f2.newPlayers).toEqual([]);
     expect(f2.players.get(2)).toBe(p2);
     // Snapshots are frozen: the tick-1 object didn't change underneath.
-    expect(p1Before.inDoomsdayClock).toBe(false);
+    expect(p1Before.tilesOwned).toBe(10);
   });
 
   test("packedPlayerUpdates carry stats after the first emission", () => {

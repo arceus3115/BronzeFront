@@ -365,6 +365,7 @@ export const PLAYER_FIELDS: readonly FieldDef<PlayerFields>[] = [
   field(["deathPosition", maybe(U32, null)]),
   field(["tilesOwned", COUNTER]),
   field(["gold", COUNTER]),
+  field(["food", COUNTER]),
   field(["tradeGold", COUNTER]),
   field(["trainGold", COUNTER]),
   field(["piracyGold", COUNTER]),
@@ -372,9 +373,6 @@ export const PLAYER_FIELDS: readonly FieldDef<PlayerFields>[] = [
   field(["troops", COUNTER]),
   field(["isTraitor", BOOL]),
   field(["traitorRemainingTicks", U32]),
-  field(["inDoomsdayClock", BOOL]),
-  field(["isDecaying", BOOL]),
-  field(["markedDoomsdayClockTick", I32]),
   field(["betrayals", U16]),
   field(["hasSpawned", BOOL]),
   field(["spawnTile", maybe(U32, undefined)]),
@@ -387,6 +385,9 @@ export const PLAYER_FIELDS: readonly FieldDef<PlayerFields>[] = [
   field(["outgoingAllianceRequests", list(STRING)]),
   field(["alliances", list(ALLIANCE)]),
   field(["outgoingEmojis", list(EMOJI)]),
+  field(["science", COUNTER]),
+  field(["bronzeWeapons", BOOL]),
+  field(["markets", BOOL]),
 ];
 
 export const UNIT_FIELDS: readonly FieldDef<UnitFields>[] = [
@@ -398,24 +399,16 @@ export const UNIT_FIELDS: readonly FieldDef<UnitFields>[] = [
   field(["reachedTarget", BOOL]),
   field(["retreating", BOOL]),
   field(["targetable", BOOL]),
-  field(["waitTicks", U32]),
   field(["markedForDeletion", MARKED_FOR_DELETION]),
   field(["health", maybe(F64, null)]),
   field(["underConstruction", BOOL]),
   field(["targetUnitId", maybe(U32, null)]),
   field(["targetTile", maybe(U32, null)]),
   field(["troops", COUNTER]),
-  field(["missileTimerQueue", list(U32)]),
   field(["level", U16]),
   field(["veterancy", COUNTER]),
   field(["hasTrainStation", BOOL]),
   field(["trainType", maybe(U8, null)], ["loaded", maybe(BOOL, null)]),
-  field(
-    ["samUpgradeStartTick", maybe(F64, null)],
-    ["samUpgradeStartRange", maybe(F64, null)],
-    ["samUpgradeTargetLevel", maybe(F64, null)],
-    ["samUpgradeDuration", maybe(F64, null)],
-  ),
 ];
 
 for (const [name, schema] of [

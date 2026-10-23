@@ -26,7 +26,6 @@ import { loadTerrainMap } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { simpleHash } from "@openfront/engine-lib/Util";
 import { EngineConfig } from "./configuration/EngineConfig";
-import { DoomsdayClockExecution } from "./execution/DoomsdayClockExecution";
 import { Executor } from "./execution/ExecutionManager";
 import { RecomputeRailClusterExecution } from "./execution/RecomputeRailClusterExecution";
 import { SpawnTimerExecution } from "./execution/SpawnTimerExecution";
@@ -190,10 +189,10 @@ export class GameRunner {
       );
     }
     this.game.addExecution(new WinCheckExecution());
-    if (this.game.config().doomsdayClockConfig().enabled) {
-      this.game.addExecution(new DoomsdayClockExecution());
-    }
-    if (!this.game.config().isUnitDisabled(UnitType.Factory)) {
+    if (
+      !this.game.config().isUnitDisabled(UnitType.Mine) ||
+      !this.game.config().isUnitDisabled(UnitType.Farm)
+    ) {
       this.game.addExecution(
         new RecomputeRailClusterExecution(this.game.railNetwork()),
       );
@@ -275,9 +274,6 @@ export class GameRunner {
     const packedMotionPlans = this.game.drainPackedMotionPlans();
     const packedPlayerUpdates = this.game.drainPackedPlayerUpdates();
     const packedAttackUpdates = this.game.drainPackedAttackUpdates();
-    const nukeImpactTiles = this.game.drainNukeImpacts();
-    const packedNukeImpacts =
-      nukeImpactTiles.length > 0 ? new Uint32Array(nukeImpactTiles) : undefined;
 
     this.callBack({
       tick: this.game.ticks(),
@@ -285,7 +281,6 @@ export class GameRunner {
       ...(packedMotionPlans ? { packedMotionPlans } : {}),
       ...(packedPlayerUpdates ? { packedPlayerUpdates } : {}),
       ...(packedAttackUpdates ? { packedAttackUpdates } : {}),
-      ...(packedNukeImpacts ? { packedNukeImpacts } : {}),
       updates: updates,
       // A copy: hosts hold several ticks' updates before reading them, and
       // the record changes in place on later ticks.

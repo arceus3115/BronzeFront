@@ -8,12 +8,11 @@ import {
   cityIcon,
   claimIcon,
   factoryIcon,
+  farmIcon,
   goldCoinIcon,
   guildIcon,
-  missileSiloIcon,
   portIcon,
   profileIcon,
-  samLauncherIcon,
   soldierIcon,
   teamIcon,
   traitorIcon,
@@ -192,7 +191,7 @@ export const COLUMN_DEFS: readonly ColumnDef[] = [
     headerVisual: { kind: "icon", src: claimIcon, white: true },
     value: (player) => player.numTilesOwned(),
     cell: (row, game) => {
-      const validTiles = game.numLandTiles() - game.numTilesWithFallout();
+      const validTiles = game.numLandTiles();
       return formatPercentage(validTiles > 0 ? row.value / validTiles : 0);
     },
   }),
@@ -267,19 +266,8 @@ export const COLUMN_DEFS: readonly ColumnDef[] = [
   }),
   unitColumn("cities", "leaderboard.cities", UnitType.City, cityIcon),
   unitColumn("ports", "leaderboard.ports", UnitType.Port, portIcon),
-  unitColumn(
-    "factories",
-    "leaderboard.factories",
-    UnitType.Factory,
-    factoryIcon,
-  ),
-  unitColumn(
-    "silos",
-    "leaderboard.launchers",
-    UnitType.MissileSilo,
-    missileSiloIcon,
-  ),
-  unitColumn("sams", "leaderboard.sams", UnitType.SAMLauncher, samLauncherIcon),
+  unitColumn("farms", "leaderboard.farms", UnitType.Farm, farmIcon),
+  unitColumn("mines", "leaderboard.mines", UnitType.Mine, factoryIcon),
   unitColumn("warships", "leaderboard.warships", UnitType.Warship, warshipIcon),
   defineColumn({
     id: "allies",

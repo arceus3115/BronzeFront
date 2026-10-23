@@ -42,8 +42,6 @@ export interface MapLayer {
   id: string;
   /** Whether the layer sits on land or water tiles. */
   placement: LayerPlacement;
-  /** If true, the layer is permanently destroyed in nuke impact radii. */
-  nukeable?: boolean;
   /**
    * Default opacity for this layer (0–1). Used as the initial value for the
    * player's layer-alpha slider.  Omit to default to 1 (fully opaque).

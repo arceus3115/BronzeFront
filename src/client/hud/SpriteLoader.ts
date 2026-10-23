@@ -3,10 +3,6 @@ import { assetUrl } from "@openfront/shared/AssetUrls";
 import { Colord } from "colord";
 import { Theme } from "../theme/ThemeProvider";
 import { UnitView } from "../view";
-const atomBombSprite = assetUrl("sprites/atombomb.png");
-const hydrogenBombSprite = assetUrl("sprites/hydrogenbomb.png");
-const mirvSprite = assetUrl("sprites/mirv2.png");
-const samMissileSprite = assetUrl("sprites/samMissile.png");
 const tradeShipSprite = assetUrl("sprites/tradeship.png");
 const trainCarriageSprite = assetUrl("sprites/trainCarriage.png");
 const trainLoadedCarriageSprite = assetUrl("sprites/trainCarriageLoaded.png");
@@ -26,11 +22,7 @@ type TrainTypeSprite = (typeof TrainTypeSprite)[keyof typeof TrainTypeSprite];
 const SPRITE_CONFIG: Partial<Record<UnitType | TrainTypeSprite, string>> = {
   [UnitType.TransportShip]: transportShipSprite,
   [UnitType.Warship]: warshipSprite,
-  [UnitType.SAMMissile]: samMissileSprite,
-  [UnitType.AtomBomb]: atomBombSprite,
-  [UnitType.HydrogenBomb]: hydrogenBombSprite,
   [UnitType.TradeShip]: tradeShipSprite,
-  [UnitType.MIRV]: mirvSprite,
   [TrainTypeSprite.Engine]: trainEngineSprite,
   [TrainTypeSprite.Carriage]: trainCarriageSprite,
   [TrainTypeSprite.LoadedCarriage]: trainLoadedCarriageSprite,
@@ -97,7 +89,7 @@ function trainTypeToSpriteType(unit: UnitView): TrainTypeSprite {
 
 const getSpriteForUnit = (unit: UnitView): ImageBitmap | null => {
   const unitType = unit.type();
-  if (unitType === UnitType.Train) {
+  if (unitType === UnitType.Depot) {
     const trainType = trainTypeToSpriteType(unit);
     return spriteMap.get(trainType) ?? null;
   }
@@ -106,7 +98,7 @@ const getSpriteForUnit = (unit: UnitView): ImageBitmap | null => {
 
 export const isSpriteReady = (unit: UnitView): boolean => {
   const unitType = unit.type();
-  if (unitType === UnitType.Train) {
+  if (unitType === UnitType.Depot) {
     const trainType = trainTypeToSpriteType(unit);
     return spriteMap.has(trainType);
   }

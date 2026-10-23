@@ -147,7 +147,6 @@
     }
   ],
   "categories": ["new", "africa"],
-  "forced_modifiers": ["isWaterNukes:50"],
   "id": "Madagascar",
   "map": {
     "height": 2332,

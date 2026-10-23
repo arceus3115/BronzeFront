@@ -1,12 +1,8 @@
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
   MessageType,
-  NukeState,
-  SamLauncherState,
   TerraNullius,
-  Tick,
   TrainType,
-  TrajectoryTile,
   TransportShipState,
   UnitType,
   WarshipState,
@@ -18,17 +14,18 @@ import {
 import { maxHealthWithVeterancy } from "@openfront/engine-lib/game/Veterancy";
 import {
   snapshotType,
-  zBytes,
   zInt,
   zNum,
   zPlayerRef,
   zRef,
   zTile,
-  zTiles,
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { simpleHash, toInt, withinInt } from "@openfront/engine-lib/Util";
 import { z } from "zod";
-import { UnitTypeSchema } from "../snapshot/CommonSchemas";
+import {
+  migrateUnitTypeName,
+  UnitTypeSchema,
+} from "../snapshot/CommonSchemas";
 import type {
   SnapshotReader,
   SnapshotWriter,
@@ -46,7 +43,6 @@ export class UnitImpl implements Unit {
   private _lastTile: TileRef;
   private _transportShipState: TransportShipState | undefined = undefined;
   private _warshipState: WarshipState | undefined = undefined;
-  private _nukeState: NukeState | undefined = undefined;
   private _reachedTarget = false;
   private _wasDestroyedByEnemy: boolean = false;
   private _destroyer: Player | undefined = undefined;
@@ -54,16 +50,12 @@ export class UnitImpl implements Unit {
   private _underConstruction: boolean = false;
   private _lastOwner: PlayerImpl | null = null;
   private _troops: number;
-  // Number of missiles in cooldown, if empty all missiles are ready.
-  private _missileTimerQueue: number[] = [];
   private _hasTrainStation: boolean = false;
   private _level: number = 1;
   private _targetable: boolean = true;
   private _loaded: boolean | undefined;
   private _trainType: TrainType | undefined;
-  // Nuke only
   private _deletionAt: number | null = null;
-  private _samLauncherState: SamLauncherState | undefined;
 
   constructor(
     private _type: UnitType,
@@ -79,14 +71,6 @@ export class UnitImpl implements Unit {
       "targetTile" in params ? (params.targetTile ?? undefined) : undefined;
     this._targetPlayer =
       "targetPlayer" in params ? (params.targetPlayer ?? undefined) : undefined;
-    if ("trajectory" in params || "waitTicks" in params) {
-      this._nukeState = {
-        trajectory: params.trajectory ?? [],
-        waitTicks: 0,
-        trajectoryIndex: 0,
-        targetedBySam: false,
-      };
-    }
     this._troops = "troops" in params ? (params.troops ?? 0) : 0;
     this._lastSetSafeFromPirates =
       "lastSetSafeFromPirates" in params
@@ -95,13 +79,6 @@ export class UnitImpl implements Unit {
     if (this._type === UnitType.TransportShip) {
       this._transportShipState = { isRetreating: false, troops: 0 };
     }
-    if (this._type === UnitType.SAMLauncher) {
-      this._samLauncherState = {
-        startRange: this.mg.config().samRange(1),
-        targetLevel: 1,
-        duration: this.mg.config().samUpgradeDuration(),
-      };
-    }
     if ("patrolTile" in params) {
       this._warshipState = {
         state: "patrolling",
@@ -109,6 +86,7 @@ export class UnitImpl implements Unit {
         lastCombatTick: -100,
         veterancy: 0,
         veterancyProgress: 0,
+        cargo: 0,
       };
     }
     this._targetUnit =
@@ -120,11 +98,10 @@ export class UnitImpl implements Unit {
     switch (this._type) {
       case UnitType.Warship:
       case UnitType.Port:
-      case UnitType.MissileSilo:
       case UnitType.DefensePost:
-      case UnitType.SAMLauncher:
       case UnitType.City:
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         this.mg.stats().unitBuild(_owner, this._type);
     }
   }
@@ -147,11 +124,37 @@ export class UnitImpl implements Unit {
   touch(): void {
     this.mg.addUpdate(this.toUpdate());
   }
-  setTileTarget(tile: TileRef | undefined): void {
-    this._targetTile = tile;
+
+  isUnderConstruction(): boolean {
+    return this._underConstruction;
   }
-  tileTarget(): TileRef | undefined {
+
+  setUnderConstruction(underConstruction: boolean): void {
+    if (this._underConstruction !== underConstruction) {
+      this._underConstruction = underConstruction;
+      this._owner._myUnitsVersion++; // unitsOwned() weighs under-construction units differently
+      this.mg.addUpdate(this.toUpdate());
+    }
+  }
+
+  hash(): number {
+    return this.tile() + simpleHash(this.type()) * this._id;
+  }
+
+  toString(): string {
+    return `Unit:${this._type},owner:${this.owner().name()}`;
+  }
+
+  setTargetTile(targetTile: TileRef | undefined) {
+    this._targetTile = targetTile;
+  }
+
+  targetTile(): TileRef | undefined {
     return this._targetTile;
+  }
+
+  targetPlayer(): Player | TerraNullius | undefined {
+    return this._targetPlayer;
   }
 
   id() {
@@ -176,12 +179,6 @@ export class UnitImpl implements Unit {
         this._transportShipState !== undefined
           ? this.transportShipState()
           : undefined,
-      nukeState:
-        this._nukeState !== undefined ? { ...this._nukeState } : undefined,
-      samUpgrade:
-        this._samLauncherState?.upgradeStartTick !== undefined
-          ? { ...this._samLauncherState }
-          : undefined,
       pos: this._tile,
       markedForDeletion: this._deletionAt ?? false,
       targetable: this._targetable,
@@ -190,7 +187,6 @@ export class UnitImpl implements Unit {
       underConstruction: this._underConstruction,
       targetUnitId: this._targetUnit?.id() ?? undefined,
       targetTile: this.targetTile() ?? undefined,
-      missileTimerQueue: this._missileTimerQueue,
       level: this.level(),
       hasTrainStation: this._hasTrainStation,
       trainType: this._trainType,
@@ -249,11 +245,10 @@ export class UnitImpl implements Unit {
     switch (this._type) {
       case UnitType.Warship:
       case UnitType.Port:
-      case UnitType.MissileSilo:
       case UnitType.DefensePost:
-      case UnitType.SAMLauncher:
       case UnitType.City:
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         this.mg.stats().unitCapture(newOwner, this._type);
         this.mg.stats().unitLose(this._owner, this._type);
         break;
@@ -354,10 +349,10 @@ export class UnitImpl implements Unit {
     this.mg.removeUnit(this);
 
     // `displayMessage === false` is how a caller retires a unit that was not
-    // destroyed: a boat that reached port or retreated, a shell that landed, a
-    // voluntary delete. Every other deletion is a destruction, which costs its
-    // owner the unit even when nobody is credited with the kill -- their own
-    // nuke, their elimination, health reaching zero with no attacker.
+    // destroyed: a boat that reached port or retreated, or a voluntary delete.
+    // Every other deletion is a destruction, which costs its owner the unit
+    // even when nobody is credited with the kill -- their elimination, or
+    // health reaching zero with no attacker.
     const wasDestroyed = displayMessage !== false;
 
     if (wasDestroyed) {
@@ -382,11 +377,10 @@ export class UnitImpl implements Unit {
           break;
         case UnitType.City:
         case UnitType.DefensePost:
-        case UnitType.MissileSilo:
         case UnitType.Port:
-        case UnitType.SAMLauncher:
         case UnitType.Warship:
-        case UnitType.Factory:
+        case UnitType.Mine:
+        case UnitType.Farm:
           this.mg.stats().unitDestroy(destroyer, this._type);
           this.mg.stats().unitLose(this.owner(), this._type);
           break;
@@ -447,6 +441,7 @@ export class UnitImpl implements Unit {
       this.markInCombat();
     }
     const merged = { ...this._warshipState, ...update };
+    if (update.cargo !== undefined) this._warshipState.cargo = update.cargo;
     if (
       merged.state === this._warshipState.state &&
       merged.patrolTile === this._warshipState.patrolTile &&
@@ -457,6 +452,7 @@ export class UnitImpl implements Unit {
       state: merged.state,
       patrolTile: merged.patrolTile,
       retreatPort: merged.retreatPort,
+      cargo: merged.cargo,
       lastCombatTick: this._warshipState.lastCombatTick,
       veterancy: this._warshipState.veterancy,
       veterancyProgress: this._warshipState.veterancyProgress,
@@ -508,106 +504,6 @@ export class UnitImpl implements Unit {
     }
   }
 
-  nukeState(): NukeState {
-    if (this._nukeState === undefined) {
-      throw new Error("nukeState called on non-nuke unit");
-    }
-    return this._nukeState;
-  }
-
-  updateNukeState(update: Partial<NukeState>): void {
-    if (this._nukeState === undefined) {
-      throw new Error("updateNukeState called on non-nuke unit");
-    }
-    const merged = { ...this._nukeState, ...update };
-    if (
-      merged.targetedBySam === this._nukeState.targetedBySam &&
-      merged.trajectoryIndex === this._nukeState.trajectoryIndex &&
-      merged.waitTicks === this._nukeState.waitTicks
-    )
-      return;
-    this._nukeState = {
-      targetedBySam: merged.targetedBySam,
-      trajectoryIndex: merged.trajectoryIndex,
-      waitTicks: merged.waitTicks,
-      trajectory: this._nukeState.trajectory,
-    };
-    this.mg.addUpdate(this.toUpdate());
-  }
-
-  isUnderConstruction(): boolean {
-    return this._underConstruction;
-  }
-
-  setUnderConstruction(underConstruction: boolean): void {
-    if (this._underConstruction !== underConstruction) {
-      this._underConstruction = underConstruction;
-      this._owner._myUnitsVersion++; // unitsOwned() weighs under-construction units differently
-      this.mg.addUpdate(this.toUpdate());
-    }
-  }
-
-  hash(): number {
-    return this.tile() + simpleHash(this.type()) * this._id;
-  }
-
-  toString(): string {
-    return `Unit:${this._type},owner:${this.owner().name()}`;
-  }
-
-  launch(): void {
-    this._missileTimerQueue.push(this.mg.ticks());
-    this.mg.addUpdate(this.toUpdate());
-  }
-
-  ticksLeftInCooldown(): Tick | undefined {
-    return this._missileTimerQueue[0];
-  }
-
-  isInCooldown(): boolean {
-    return this._missileTimerQueue.length === this._level;
-  }
-
-  missileTimerQueue(): number[] {
-    return this._missileTimerQueue;
-  }
-
-  samLauncherState(): SamLauncherState | undefined {
-    return this._samLauncherState;
-  }
-
-  reloadMissile(): void {
-    this._missileTimerQueue.shift();
-    this.mg.addUpdate(this.toUpdate());
-  }
-
-  setTargetTile(targetTile: TileRef | undefined) {
-    this._targetTile = targetTile;
-  }
-
-  targetTile(): TileRef | undefined {
-    return this._targetTile;
-  }
-
-  targetPlayer(): Player | TerraNullius | undefined {
-    return this._targetPlayer;
-  }
-
-  setTrajectoryIndex(i: number): void {
-    if (this._nukeState === undefined) {
-      throw new Error("setTrajectoryIndex called on non-nuke unit");
-    }
-    const max = this.trajectory().length - 1;
-    this._nukeState.trajectoryIndex = i < 0 ? 0 : i > max ? max : i;
-  }
-
-  trajectoryIndex(): number {
-    return this._nukeState?.trajectoryIndex ?? 0;
-  }
-
-  trajectory(): TrajectoryTile[] {
-    return this._nukeState?.trajectory ?? [];
-  }
 
   setTargetUnit(target: Unit | undefined): void {
     this._targetUnit = target;
@@ -615,14 +511,6 @@ export class UnitImpl implements Unit {
 
   targetUnit(): Unit | undefined {
     return this._targetUnit;
-  }
-
-  setTargetedBySAM(targeted: boolean): void {
-    this._nukeState!.targetedBySam = targeted;
-  }
-
-  targetedBySAM(): boolean {
-    return this._nukeState!.targetedBySam;
   }
 
   setReachedTarget(): void {
@@ -736,34 +624,15 @@ export class UnitImpl implements Unit {
   }
 
   increaseLevel(): void {
-    if (this._type === UnitType.SAMLauncher) {
-      const currentTick = this.mg.ticks();
-      const currentRange = this.mg.config().dynamicSamRange(this, currentTick);
-      this._samLauncherState = {
-        upgradeStartTick: currentTick,
-        startRange: currentRange,
-        targetLevel: this._level + 1,
-        duration: this.mg.config().samUpgradeDuration(),
-      };
-    }
     this._level++;
     // unitCount()/unitsOwned() are level-weighted and memoised on these versions
     this.mg.bumpUnitsVersion();
     this._owner._myUnitsVersion++;
-    if ([UnitType.MissileSilo, UnitType.SAMLauncher].includes(this.type())) {
-      this._missileTimerQueue.push(this.mg.ticks());
-    }
     this.mg.addUpdate(this.toUpdate());
   }
 
   decreaseLevel(destroyer?: Player): void {
     this._level--;
-    if ([UnitType.MissileSilo, UnitType.SAMLauncher].includes(this.type())) {
-      this._missileTimerQueue.pop();
-    }
-    if (this._type === UnitType.SAMLauncher) {
-      this._samLauncherState = undefined;
-    }
     if (this._level <= 0) {
       this.delete(true, destroyer);
       return;
@@ -790,7 +659,6 @@ export class UnitImpl implements Unit {
   }
 
   snapshot(w: SnapshotWriter): UnitState {
-    const nuke = this._nukeState;
     return {
       id: this._id,
       type: this._type,
@@ -823,17 +691,6 @@ export class UnitImpl implements Unit {
             veterancyProgress: this._warshipState.veterancyProgress,
           }
         : null,
-      nukeState: nuke
-        ? {
-            trajectoryTiles: Uint32Array.from(nuke.trajectory, (t) => t.tile),
-            trajectoryTargetable: Uint8Array.from(nuke.trajectory, (t) =>
-              t.targetable ? 1 : 0,
-            ),
-            trajectoryIndex: nuke.trajectoryIndex,
-            targetedBySam: nuke.targetedBySam,
-            waitTicks: nuke.waitTicks,
-          }
-        : null,
       reachedTarget: this._reachedTarget,
       wasDestroyedByEnemy: this._wasDestroyedByEnemy,
       destroyer: w.playerOrNull(this._destroyer),
@@ -841,21 +698,12 @@ export class UnitImpl implements Unit {
       underConstruction: this._underConstruction,
       lastOwner: w.playerOrNull(this._lastOwner),
       troops: this._troops,
-      missileTimerQueue: [...this._missileTimerQueue],
       hasTrainStation: this._hasTrainStation,
       level: this._level,
       targetable: this._targetable,
       loaded: this._loaded ?? null,
       trainType: this._trainType ?? null,
       deletionAt: this._deletionAt,
-      samLauncherState: this._samLauncherState
-        ? {
-            upgradeStartTick: this._samLauncherState.upgradeStartTick,
-            startRange: this._samLauncherState.startRange,
-            targetLevel: this._samLauncherState.targetLevel,
-            duration: this._samLauncherState.duration,
-          }
-        : null,
     };
   }
 
@@ -877,18 +725,6 @@ export class UnitImpl implements Unit {
       ? { ...s.transportShipState }
       : undefined;
     this._warshipState = s.warshipState ? { ...s.warshipState } : undefined;
-    const nuke = s.nukeState;
-    this._nukeState = nuke
-      ? {
-          trajectory: Array.from(nuke.trajectoryTiles, (tile, i) => ({
-            tile,
-            targetable: nuke.trajectoryTargetable[i] === 1,
-          })),
-          trajectoryIndex: nuke.trajectoryIndex,
-          targetedBySam: nuke.targetedBySam,
-          waitTicks: nuke.waitTicks,
-        }
-      : undefined;
     this._reachedTarget = s.reachedTarget;
     this._wasDestroyedByEnemy = s.wasDestroyedByEnemy;
     this._destroyer = r.playerOrNull(s.destroyer) ?? undefined;
@@ -896,22 +732,22 @@ export class UnitImpl implements Unit {
     this._underConstruction = s.underConstruction;
     this._lastOwner = r.playerOrNull(s.lastOwner) as PlayerImpl | null;
     this._troops = s.troops;
-    this._missileTimerQueue = [...s.missileTimerQueue];
     this._hasTrainStation = s.hasTrainStation;
     this._level = s.level;
     this._targetable = s.targetable;
     this._loaded = s.loaded ?? undefined;
     this._trainType = s.trainType ?? undefined;
     this._deletionAt = s.deletionAt;
-    this._samLauncherState = s.samLauncherState
-      ? { ...s.samLauncherState }
-      : undefined;
   }
 }
 
 export const UnitSnapshot = snapshotType({
   name: "Unit",
-  version: 1,
+  version: 3,
+  migrations: {
+    1: (data) => data,
+    2: (data) => ({ ...data, type: migrateUnitTypeName(data.type) }),
+  },
   schema: z.object({
     id: zInt(),
     type: UnitTypeSchema,
@@ -935,15 +771,7 @@ export const UnitSnapshot = snapshotType({
         lastCombatTick: zInt(),
         veterancy: zInt(),
         veterancyProgress: zInt(),
-      })
-      .nullable(),
-    nukeState: z
-      .object({
-        trajectoryTiles: zTiles(),
-        trajectoryTargetable: zBytes(),
-        trajectoryIndex: zInt(),
-        targetedBySam: z.boolean(),
-        waitTicks: zInt(),
+        cargo: z.number().optional(),
       })
       .nullable(),
     reachedTarget: z.boolean(),
@@ -953,21 +781,12 @@ export const UnitSnapshot = snapshotType({
     underConstruction: z.boolean(),
     lastOwner: zPlayerRef().nullable(),
     troops: zNum(),
-    missileTimerQueue: z.array(zInt()),
     hasTrainStation: z.boolean(),
     level: zInt(),
     targetable: z.boolean(),
     loaded: z.boolean().nullable(),
     trainType: z.enum(TrainType).nullable(),
     deletionAt: zInt().nullable(),
-    samLauncherState: z
-      .object({
-        upgradeStartTick: zInt().optional(),
-        startRange: zNum(),
-        targetLevel: zInt(),
-        duration: zInt(),
-      })
-      .nullable(),
   }),
 });
 export type UnitState = z.infer<typeof UnitSnapshot.schema>;

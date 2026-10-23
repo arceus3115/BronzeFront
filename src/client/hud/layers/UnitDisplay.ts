@@ -16,16 +16,12 @@ import { UserSettings } from "../../UserSettings";
 import { translateText } from "../../Utils";
 import { GameView } from "../../view";
 import {
-  atomBombIcon,
   cityIcon,
   defensePostIcon,
   factoryIcon,
+  farmIcon,
   goldCoinIcon,
-  hydrogenBombIcon,
-  mirvIcon,
-  missileSiloIcon,
   portIcon,
-  samLauncherIcon,
   warshipIcon,
 } from "../HotbarIcons";
 import { TutorialHighlight, TutorialHighlightEvent } from "../Tutorial";
@@ -39,11 +35,10 @@ export class UnitDisplay extends LitElement implements Controller {
   private keybinds: Record<string, { value: string; key: string }> = {};
   private _cities = 0;
   private _warships = 0;
-  private _factories = 0;
-  private _missileSilo = 0;
+  private _farms = 0;
+  private _mines = 0;
   private _port = 0;
   private _defensePost = 0;
-  private _samLauncher = 0;
   private allDisabled = false;
   private _hoveredUnit: PlayerBuildableUnitType | null = null;
   private tutorialHighlight: PlayerBuildableUnitType | null = null;
@@ -66,13 +61,9 @@ export class UnitDisplay extends LitElement implements Controller {
       city: UnitType.City,
       port: UnitType.Port,
       defense_post: UnitType.DefensePost,
-      factory: UnitType.Factory,
+      farm: UnitType.Farm,
+      mine: UnitType.Mine,
       warship: UnitType.Warship,
-      silo: UnitType.MissileSilo,
-      atom: UnitType.AtomBomb,
-      hydrogen: UnitType.HydrogenBomb,
-      mirv: UnitType.MIRV,
-      sam: UnitType.SAMLauncher,
     };
     this.eventBus.on(TutorialHighlightEvent, (e) => {
       this.tutorialHighlight = (e.target && highlightUnits[e.target]) ?? null;
@@ -94,13 +85,6 @@ export class UnitDisplay extends LitElement implements Controller {
     if (this.game?.config().isUnitDisabled(item)) return false;
     const player = this.game?.myPlayer();
     switch (item) {
-      case UnitType.AtomBomb:
-      case UnitType.HydrogenBomb:
-      case UnitType.MIRV:
-        return (
-          this.cost(item) <= (player?.gold() ?? 0n) &&
-          (player?.units(UnitType.MissileSilo).length ?? 0) > 0
-        );
       case UnitType.Warship:
         return (
           this.cost(item) <= (player?.gold() ?? 0n) &&
@@ -118,11 +102,10 @@ export class UnitDisplay extends LitElement implements Controller {
       this.playerBuildables = buildables;
     });
     this._cities = player.totalUnitLevels(UnitType.City);
-    this._missileSilo = player.totalUnitLevels(UnitType.MissileSilo);
     this._port = player.totalUnitLevels(UnitType.Port);
     this._defensePost = player.totalUnitLevels(UnitType.DefensePost);
-    this._samLauncher = player.totalUnitLevels(UnitType.SAMLauncher);
-    this._factories = player.totalUnitLevels(UnitType.Factory);
+    this._farms = player.totalUnitLevels(UnitType.Farm);
+    this._mines = player.totalUnitLevels(UnitType.Mine);
     this._warships = player.totalUnitLevels(UnitType.Warship);
     this.requestUpdate();
   }
@@ -152,11 +135,18 @@ export class UnitDisplay extends LitElement implements Controller {
             this.keybinds["buildCity"]?.key ?? "1",
           )}
           ${this.renderUnitItem(
+            farmIcon,
+            this._farms,
+            UnitType.Farm,
+            "farm",
+            this.keybinds["buildFarm"]?.key ?? "2",
+          )}
+          ${this.renderUnitItem(
             factoryIcon,
-            this._factories,
-            UnitType.Factory,
-            "factory",
-            this.keybinds["buildFactory"]?.key ?? "2",
+            this._mines,
+            UnitType.Mine,
+            "mine",
+            this.keybinds["buildMine"]?.key ?? "5",
           )}
           ${this.renderUnitItem(
             portIcon,
@@ -173,46 +163,11 @@ export class UnitDisplay extends LitElement implements Controller {
             this.keybinds["buildDefensePost"]?.key ?? "4",
           )}
           ${this.renderUnitItem(
-            missileSiloIcon,
-            this._missileSilo,
-            UnitType.MissileSilo,
-            "missile_silo",
-            this.keybinds["buildMissileSilo"]?.key ?? "5",
-          )}
-          ${this.renderUnitItem(
-            samLauncherIcon,
-            this._samLauncher,
-            UnitType.SAMLauncher,
-            "sam_launcher",
-            this.keybinds["buildSamLauncher"]?.key ?? "6",
-          )}
-          ${this.renderUnitItem(
             warshipIcon,
             this._warships,
             UnitType.Warship,
             "warship",
             this.keybinds["buildWarship"]?.key ?? "7",
-          )}
-          ${this.renderUnitItem(
-            atomBombIcon,
-            null,
-            UnitType.AtomBomb,
-            "atom_bomb",
-            this.keybinds["buildAtomBomb"]?.key ?? "8",
-          )}
-          ${this.renderUnitItem(
-            hydrogenBombIcon,
-            null,
-            UnitType.HydrogenBomb,
-            "hydrogen_bomb",
-            this.keybinds["buildHydrogenBomb"]?.key ?? "9",
-          )}
-          ${this.renderUnitItem(
-            mirvIcon,
-            null,
-            UnitType.MIRV,
-            "mirv",
-            this.keybinds["buildMIRV"]?.key ?? "0",
           )}
         </div>
       </div>
@@ -294,15 +249,6 @@ export class UnitDisplay extends LitElement implements Controller {
           }}
           @mouseenter=${() => {
             switch (unitType) {
-              case UnitType.AtomBomb:
-              case UnitType.HydrogenBomb:
-                this.eventBus?.emit(
-                  new ToggleStructureEvent([
-                    UnitType.MissileSilo,
-                    UnitType.SAMLauncher,
-                  ]),
-                );
-                break;
               case UnitType.Warship:
                 this.eventBus?.emit(new ToggleStructureEvent([UnitType.Port]));
                 break;

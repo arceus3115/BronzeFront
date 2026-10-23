@@ -11,13 +11,9 @@ export type TutorialHighlight =
   | "city"
   | "port"
   | "defense_post"
-  | "factory"
+  | "farm"
+  | "mine"
   | "warship"
-  | "silo"
-  | "atom"
-  | "hydrogen"
-  | "mirv"
-  | "sam"
   | "tribes"
   | "nation";
 
@@ -52,20 +48,12 @@ export interface TutorialContext {
   ports: number;
   defensePostDisabled: boolean;
   defensePosts: number;
-  factoryDisabled: boolean;
-  factories: number;
+  farmDisabled: boolean;
+  farms: number;
+  mineDisabled: boolean;
+  mines: number;
   warshipDisabled: boolean;
   warships: number;
-  siloDisabled: boolean;
-  silos: number;
-  atomDisabled: boolean;
-  /** A completed missile silo that isn't reloading exists. */
-  siloReady: boolean;
-  /** An atom bomb of ours is (or was seen) in flight. */
-  atomLaunched: boolean;
-  hydrogenDisabled: boolean;
-  mirvDisabled: boolean;
-  samDisabled: boolean;
 }
 
 export interface TutorialStep {
@@ -81,10 +69,9 @@ export interface TutorialStep {
     | "buildCity"
     | "buildPort"
     | "buildDefensePost"
-    | "buildFactory"
-    | "buildWarship"
-    | "buildMissileSilo"
-    | "buildAtomBomb";
+    | "buildFarm"
+    | "buildMine"
+    | "buildWarship";
   /**
    * Render these `tutorial.step.*` keys as a bullet list instead of the
    * step's own single text.
@@ -147,16 +134,29 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     manual: true,
   },
   {
-    id: "buy_factory",
-    highlight: "factory",
-    unit: UnitType.Factory,
-    hotkey: "buildFactory",
-    applies: (c) => !c.factoryDisabled,
-    isDone: (c) => c.factories > 0,
+    id: "buy_farm",
+    highlight: "farm",
+    unit: UnitType.Farm,
+    hotkey: "buildFarm",
+    applies: (c) => !c.farmDisabled,
+    isDone: (c) => c.farms > 0,
   },
   {
-    id: "factory_info",
-    applies: (c) => !c.factoryDisabled,
+    id: "farm_info",
+    applies: (c) => !c.farmDisabled,
+    manual: true,
+  },
+  {
+    id: "buy_mine",
+    highlight: "mine",
+    unit: UnitType.Mine,
+    hotkey: "buildMine",
+    applies: (c) => !c.mineDisabled,
+    isDone: (c) => c.mines > 0,
+  },
+  {
+    id: "mine_info",
+    applies: (c) => !c.mineDisabled,
     manual: true,
   },
   // Boats are free, so no earn-gold gating; done once one of ours is afloat.
@@ -195,49 +195,6 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
     hotkey: "buildWarship",
     applies: (c) => !c.warshipDisabled && !c.portDisabled,
     isDone: (c) => c.warships > 0,
-  },
-  {
-    id: "buy_silo",
-    highlight: "silo",
-    unit: UnitType.MissileSilo,
-    hotkey: "buildMissileSilo",
-    applies: (c) => !c.siloDisabled,
-    isDone: (c) => c.silos > 0,
-  },
-  // Waits (via the earn-gold text) until the bomb is affordable, then asks
-  // for a launch; done as soon as one of ours is in flight.
-  {
-    id: "launch_atom",
-    highlight: "atom",
-    unit: UnitType.AtomBomb,
-    hotkey: "buildAtomBomb",
-    applies: (c) => !c.siloDisabled && !c.atomDisabled,
-    isDone: (c) => c.atomLaunched,
-  },
-  // One stop per weapon, each highlighting its spot in the unit hotbar.
-  {
-    id: "atom_info",
-    highlight: "atom",
-    applies: (c) => !c.siloDisabled && !c.atomDisabled,
-    manual: true,
-  },
-  {
-    id: "hydrogen_info",
-    highlight: "hydrogen",
-    applies: (c) => !c.siloDisabled && !c.hydrogenDisabled,
-    manual: true,
-  },
-  {
-    id: "mirv_info",
-    highlight: "mirv",
-    applies: (c) => !c.siloDisabled && !c.mirvDisabled,
-    manual: true,
-  },
-  {
-    id: "sam_info",
-    highlight: "sam",
-    applies: (c) => !c.samDisabled,
-    manual: true,
   },
 ];
 

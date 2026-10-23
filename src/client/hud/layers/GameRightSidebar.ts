@@ -5,7 +5,6 @@ import { html, LitElement } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { createNextLobby } from "../../Api";
 import { ClientEnv } from "../../ClientEnv";
-import "../../components/DoomsdayClockPanel";
 import "../../components/OvertimePanel";
 import { Controller } from "../../Controller";
 import { isDesktopShell } from "../../DesktopShell";
@@ -400,11 +399,6 @@ export class GameRightSidebar extends LitElement implements Controller {
           <img src=${exitIcon} alt="exit" width="20" height="20" />
         </div>
       </aside>
-      <doomsday-clock-panel
-        .game=${this.game}
-        .hasWinner=${this.hasWinner}
-        .refreshKey=${this.timer}
-      ></doomsday-clock-panel>
       <overtime-panel
         .game=${this.game}
         .hasWinner=${this.hasWinner}

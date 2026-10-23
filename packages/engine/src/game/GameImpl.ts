@@ -1,4 +1,5 @@
 import { GameMap, TileRef } from "@openfront/engine-api/game/GameMap";
+import { foodWeight, mineWeight } from "@openfront/engine-lib/game/Biome";
 import {
   Cell,
   ColoredTeams,
@@ -18,7 +19,6 @@ import {
   TeamGameSpawnAreas,
   TerrainType,
   TerraNullius,
-  Tick,
   Trios,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
@@ -68,6 +68,7 @@ import {
   NationSchema,
   playerInfoData,
   PlayerInfoSchema,
+  migrateUnitTypeName,
   UnitTypeSchema,
 } from "../snapshot/CommonSchemas";
 import type {
@@ -158,17 +159,13 @@ export class GameImpl implements Game {
   // Used to assign unique IDs to each new alliance
   private nextAllianceID: number = 0;
 
-  private _mirvsLaunched = 0;
   private shipStaggers = { tradeShip: 0, transportShip: 0 };
-  private _nationMirvTargets = new Map<PlayerID, Tick>();
 
   private _isPaused: boolean = false;
   private _winner: Player | Team | null = null;
   private _waterManager: WaterManager;
   private _sharedWaterCache: SharedWaterCache;
   private _teamGameSpawnAreas: TeamGameSpawnAreas | undefined;
-  /** Tiles from nuke blast radii this tick, drained by the renderer. */
-  private _nukeImpactQueue: TileRef[] = [];
 
   constructor(
     private _humans: PlayerInfo[],
@@ -283,52 +280,14 @@ export class GameImpl implements Game {
     return old;
   }
 
-  setFallout(tile: TileRef, value: boolean) {
-    if (value && this.hasOwner(tile)) {
-      throw Error(`cannot set fallout, tile ${tile} has owner`);
-    }
-    if (this._map.hasFallout(tile)) {
-      return;
-    }
-    this._territoryVersion++;
-    this._map.setFallout(tile, value);
-    this.recordTileUpdate(tile);
-  }
-
   setWater(tile: TileRef): void {
     if (!this.isLand(tile)) return;
     if (this.hasOwner(tile)) {
       throw Error(`cannot set water, tile ${tile} has owner`);
     }
-    // Clear fallout if present (water tiles shouldn't have fallout)
-    if (this._map.hasFallout(tile)) {
-      this._map.setFallout(tile, false);
-    }
     this._territoryVersion++;
     this._map.setWater(tile);
     this.recordTileUpdate(tile);
-  }
-
-  queueWaterConversion(tile: TileRef): void {
-    if (!this.isLand(tile)) return;
-    if (this.hasOwner(tile)) {
-      throw Error(`cannot queue water conversion, tile ${tile} has owner`);
-    }
-    if (!this._config.waterNukes()) {
-      this.setFallout(tile, true);
-      return;
-    }
-    this._waterManager.queueTile(tile);
-  }
-
-  queueNukeImpact(tile: TileRef): void {
-    this._nukeImpactQueue.push(tile);
-  }
-
-  drainNukeImpacts(): TileRef[] {
-    const tiles = this._nukeImpactQueue;
-    this._nukeImpactQueue = [];
-    return tiles;
   }
 
   unit(id: number): Unit | undefined {
@@ -862,6 +821,24 @@ export class GameImpl implements Game {
     this._map.forEachNeighborWithDiag(tile, callback);
   }
 
+  addSiegeProgress(cityId: number, delta: number): number {
+    const next = (this._siege.get(cityId) ?? 0) + delta;
+    if (next <= 0) {
+      this._siege.delete(cityId);
+      return 0;
+    }
+    this._siege.set(cityId, next);
+    return next;
+  }
+
+  siegeProgress(cityId: number): number {
+    return this._siege.get(cityId) ?? 0;
+  }
+
+  clearSiege(cityId: number): void {
+    this._siege.delete(cityId);
+  }
+
   conquer(owner: PlayerImpl, tile: TileRef): void {
     if (!this.isLand(tile)) {
       throw Error(`cannot conquer water`);
@@ -876,13 +853,18 @@ export class GameImpl implements Game {
       previousOwner._tiles.delete(tile);
       previousOwner._borderTiles.delete(tile);
     }
+    if (previousOwner.isPlayer()) {
+      const lost = this._map.biome(tile);
+      previousOwner.addYield(-foodWeight(lost), -mineWeight(lost));
+    }
     this._territoryVersion++;
     this._map.setOwnerID(tile, owner.smallID());
     owner._tiles.add(tile);
+    const gained = this._map.biome(tile);
+    owner.addYield(foodWeight(gained), mineWeight(gained));
     owner._lastTileChange = this._ticks;
     owner._tileChangeVersion++;
     this.updateBorders(tile);
-    this._map.setFallout(tile, false);
     this.recordTileUpdate(tile);
   }
 
@@ -899,6 +881,8 @@ export class GameImpl implements Game {
     previousOwner._tileChangeVersion++;
     previousOwner._tiles.delete(tile);
     previousOwner._borderTiles.delete(tile);
+    const lost = this._map.biome(tile);
+    previousOwner.addYield(-foodWeight(lost), -mineWeight(lost));
 
     this._territoryVersion++;
     this._map.setOwnerID(tile, 0);
@@ -1129,7 +1113,7 @@ export class GameImpl implements Game {
   }
 
   totalLandTiles(): number {
-    return Math.max(0, this.numLandTiles() - this.numTilesWithFallout());
+    return this.numLandTiles();
   }
 
   teamSpawnArea(team: Team): SpawnArea | undefined {
@@ -1229,10 +1213,11 @@ export class GameImpl implements Game {
     this._unitsVersion++;
   }
 
-  // Bumped on every change of tile ownership, fallout or land/water — i.e.
+  // Bumped on every change of tile ownership or land/water — i.e.
   // anything Player.nearby() can observe — so per-player answers can be memoised
   // for as long as nothing on the map moved.
   private _territoryVersion = 0;
+  private _siege = new Map<number, number>();
   territoryVersion(): number {
     return this._territoryVersion;
   }
@@ -1381,9 +1366,6 @@ export class GameImpl implements Game {
     this._territoryVersion++;
     return this._map.setOwnerID(ref, playerId);
   }
-  hasFallout(ref: TileRef): boolean {
-    return this._map.hasFallout(ref);
-  }
   isBorder(ref: TileRef): boolean {
     return this._map.isBorder(ref);
   }
@@ -1411,6 +1393,12 @@ export class GameImpl implements Game {
   }
   terrainType(ref: TileRef): TerrainType {
     return this._map.terrainType(ref);
+  }
+  biome(ref: TileRef): TerrainType {
+    return this._map.biome(ref);
+  }
+  setBiome(ref: TileRef, biome: TerrainType): void {
+    this._map.setBiome(ref, biome);
   }
   forEachTile(fn: (tile: TileRef) => void): void {
     return this._map.forEachTile(fn);
@@ -1443,26 +1431,14 @@ export class GameImpl implements Game {
   updateTile(tile: TileRef, state: number): boolean {
     return this._map.updateTile(tile, state);
   }
-  numTilesWithFallout(): number {
-    return this._map.numTilesWithFallout();
-  }
   stats(): Stats {
     return this._stats;
   }
   railNetwork(): RailNetwork {
     return this._railNetwork;
   }
-  mirvsLaunched(): number {
-    return this._mirvsLaunched;
-  }
-  recordMirvLaunch(): void {
-    this._mirvsLaunched++;
-  }
   nextShipStagger(kind: "tradeShip" | "transportShip"): number {
     return this.shipStaggers[kind]++ % WaterPathFinder.STAGGER_SPREAD;
-  }
-  nationMirvTargets(): Map<PlayerID, Tick> {
-    return this._nationMirvTargets;
   }
   /** The PlayerInfo object this game holds for a player id, if any. */
   findPlayerInfo(id: PlayerID): PlayerInfo | undefined {
@@ -1496,7 +1472,7 @@ export class GameImpl implements Game {
   /**
    * Game-level state for a snapshot. Taken at a tick boundary, so the
    * per-tick update buffers (updates, tile pairs, player and attack quads,
-   * motion plans, nuke impacts) are always drained and are not stored.
+   * motion plans) are always drained and are not stored.
    */
   snapshotState(w: SnapshotWriter): GameState {
     // Exec list order is state: register both lists first so their table
@@ -1530,8 +1506,6 @@ export class GameImpl implements Game {
       unitsVersion: this._unitsVersion,
       territoryVersion: this._territoryVersion,
       shipStaggers: { ...this.shipStaggers },
-      nationMirvTargets: [...this._nationMirvTargets],
-      mirvsLaunched: this._mirvsLaunched,
       rail: w.versioned(
         RailNetworkSnapshot,
         (this._railNetwork as RailNetworkImpl).snapshot(w),
@@ -1586,8 +1560,6 @@ export class GameImpl implements Game {
     this._unitsVersion = s.unitsVersion;
     this._territoryVersion = s.territoryVersion;
     this.shipStaggers = { ...s.shipStaggers };
-    this._nationMirvTargets = new Map(s.nationMirvTargets);
-    this._mirvsLaunched = s.mirvsLaunched;
     (this._railNetwork as RailNetworkImpl).restoreSnapshot(
       readVersioned(RailNetworkSnapshot, s.rail),
       r,
@@ -1690,7 +1662,16 @@ export class GameImpl implements Game {
 
 export const GameSnapshot = snapshotType({
   name: "Game",
-  version: 1,
+  version: 3,
+  migrations: {
+    1: (data) => data,
+    2: (data) => ({
+      ...data,
+      unitGrid: data.unitGrid.map((column: [string, unknown][]) =>
+        column.map(([type, refs]) => [migrateUnitTypeName(type), refs]),
+      ),
+    }),
+  },
   schema: z.object({
     ticks: zInt(),
     startTick: zInt().nullable(),
@@ -1718,8 +1699,6 @@ export const GameSnapshot = snapshotType({
     unitsVersion: zInt(),
     territoryVersion: zInt(),
     shipStaggers: z.object({ tradeShip: zInt(), transportShip: zInt() }),
-    nationMirvTargets: z.array(z.tuple([z.string(), zInt()])),
-    mirvsLaunched: zInt(),
     rail: VersionedSchema,
     water: VersionedSchema,
     sharedWaterCache: VersionedSchema,

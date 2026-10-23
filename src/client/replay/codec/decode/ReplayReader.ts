@@ -87,7 +87,6 @@ export class ReplayReader {
       totalFrames: 0,
       players: [],
       unitTypes: [],
-      nukeImpacts: [],
       railroadEvents: [],
       motionPlans: [],
       constructionStarts: [],
@@ -130,7 +129,6 @@ export class ReplayReader {
         players: h.players.slice(),
         unitTypes: h.unitTypes.slice(),
         events: {
-          nukeImpacts: h.nukeImpacts.slice(),
           railroadEvents: h.railroadEvents.slice(),
           motionPlans: h.motionPlans.slice(),
           constructionStarts: h.constructionStarts.slice(),

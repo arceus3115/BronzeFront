@@ -4,7 +4,6 @@ import {
   BuildableAttacks,
   bulkCost,
   maxBulkAmount,
-  NUKE_BULK_STEPS,
   PlayerActions,
   PlayerBuildableUnitType,
   STRUCTURE_BULK_STEPS,
@@ -468,35 +467,24 @@ function createMenuElements(
           if (!buildableUnit) {
             return [];
           }
-          const isStackableNuke =
-            item.unitType === UnitType.AtomBomb &&
-            buildableUnit.canBuild !== false;
           if (
-            (buildableUnit.canUpgrade === false && !isStackableNuke) ||
+            buildableUnit.canUpgrade === false ||
             !params.buildMenu.canBuildOrUpgrade(item)
           ) {
             return [];
           }
           // Always four slots in fixed positions for muscle memory — laid
           // out clockwise from the top: x1, the two fixed steps, then the
-          // largest amount the player can execute right now (bombs: top x1,
-          // right x2, bottom x5, left xMax). max is capped by gold, and for
-          // nukes by loaded silo tubes; slots beyond it render disabled.
-          // With no executable amount past x1 there is nothing to choose —
-          // return no submenu so the click falls through to an immediate x1
-          // (see action below).
+          // largest amount the player can execute right now. max is capped
+          // by gold; slots beyond it render disabled. With no executable
+          // amount past x1 there is nothing to choose — return no submenu so
+          // the click falls through to an immediate x1 (see action below).
           const myPlayer = params.game.myPlayer();
-          let maxAmount = maxBulkAmount(buildableUnit, myPlayer?.gold() ?? 0n);
-          if (isStackableNuke) {
-            maxAmount = Math.min(maxAmount, myPlayer?.readyMissileCount() ?? 0);
-          }
+          const maxAmount = maxBulkAmount(buildableUnit, myPlayer?.gold() ?? 0n);
           if (maxAmount <= 1) {
             return [];
           }
-          const steps = isStackableNuke
-            ? NUKE_BULK_STEPS
-            : STRUCTURE_BULK_STEPS;
-          const slots = [1, ...steps, maxAmount];
+          const slots = [1, ...STRUCTURE_BULK_STEPS, maxAmount];
           return slots.map((amount, i) => {
             const isMaxSlot = i === slots.length - 1;
             const executable = amount <= maxAmount;
@@ -532,24 +520,13 @@ function createMenuElements(
               disabled: (p: MenuElementParams) =>
                 !executable || (p.game.myPlayer()?.gold() ?? 0n) < cost,
               action: (p: MenuElementParams) => {
-                if (isStackableNuke) {
-                  p.eventBus.emit(
-                    new BuildUnitIntentEvent(
-                      buildableUnit.type,
-                      p.tile,
-                      p.uiState?.rocketDirectionUp,
-                      amount,
-                    ),
-                  );
-                } else {
-                  p.eventBus.emit(
-                    new SendUpgradeStructureIntentEvent(
-                      buildableUnit.canUpgrade as number,
-                      buildableUnit.type,
-                      amount,
-                    ),
-                  );
-                }
+                p.eventBus.emit(
+                  new SendUpgradeStructureIntentEvent(
+                    buildableUnit.canUpgrade as number,
+                    buildableUnit.type,
+                    amount,
+                  ),
+                );
                 p.closeMenu();
               },
             };
@@ -571,17 +548,8 @@ function createMenuElements(
                 ),
               );
             } else if (buildableUnit.canBuild !== false) {
-              const rocketDirectionUp =
-                item.unitType === UnitType.AtomBomb ||
-                item.unitType === UnitType.HydrogenBomb
-                  ? params.uiState?.rocketDirectionUp
-                  : undefined;
               params.eventBus.emit(
-                new BuildUnitIntentEvent(
-                  buildableUnit.type,
-                  params.tile,
-                  rocketDirectionUp,
-                ),
+                new BuildUnitIntentEvent(buildableUnit.type, params.tile),
               );
             }
           }

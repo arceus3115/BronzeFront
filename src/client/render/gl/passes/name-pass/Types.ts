@@ -77,12 +77,6 @@ export interface PlayerSlot {
   allianceReq: boolean;
   target: boolean;
   embargo: boolean;
-  nukeActive: boolean;
-  nukeTargetsMe: boolean;
-  inDoomsdayClock: boolean;
-  doomsdayClockDraining: boolean;
-  doomsdayClockDecaying: boolean;
-  doomsdayClockWarnProgress: number;
   traitorRemainingTicks: number;
   allianceFraction: number;
   allianceRemainingTicks: number;

@@ -33,18 +33,11 @@ vi.mock("../../../src/client/hud/layers/BuildMenu", async () => {
         countable: true,
       },
       {
-        unitType: UnitType.Factory,
+        unitType: UnitType.Mine,
         key: "unit_type.factory",
         description: "unit_type.factory_desc",
         icon: "factory-icon",
         countable: true,
-      },
-      {
-        unitType: UnitType.AtomBomb,
-        key: "unit_type.atom_bomb",
-        description: "unit_type.atom_bomb_desc",
-        icon: "atom-bomb-icon",
-        countable: false,
       },
       {
         unitType: UnitType.Warship,
@@ -52,20 +45,6 @@ vi.mock("../../../src/client/hud/layers/BuildMenu", async () => {
         description: "unit_type.warship_desc",
         icon: "warship-icon",
         countable: true,
-      },
-      {
-        unitType: UnitType.HydrogenBomb,
-        key: "unit_type.hydrogen_bomb",
-        description: "unit_type.hydrogen_bomb_desc",
-        icon: "hydrogen-bomb-icon",
-        countable: false,
-      },
-      {
-        unitType: UnitType.MIRV,
-        key: "unit_type.mirv",
-        description: "unit_type.mirv_desc",
-        icon: "mirv-icon",
-        countable: false,
       },
     ],
   };
@@ -123,13 +102,7 @@ describe("RadialMenuElements", () => {
       buildableUnits: [
         { type: UnitType.City, canBuild: true, canUpgrade: false, cost: 100n },
         {
-          type: UnitType.Factory,
-          canBuild: true,
-          canUpgrade: false,
-          cost: 100n,
-        },
-        {
-          type: UnitType.AtomBomb,
+          type: UnitType.Mine,
           canBuild: true,
           canUpgrade: false,
           cost: 100n,
@@ -140,13 +113,6 @@ describe("RadialMenuElements", () => {
           canUpgrade: false,
           cost: 100n,
         },
-        {
-          type: UnitType.HydrogenBomb,
-          canBuild: true,
-          canUpgrade: false,
-          cost: 100n,
-        },
-        { type: UnitType.MIRV, canBuild: true, canUpgrade: false, cost: 100n },
         {
           type: UnitType.TransportShip,
           canBuild: true,
@@ -211,12 +177,7 @@ describe("RadialMenuElements", () => {
       expect(subMenu).toBeDefined();
       expect(subMenu.length).toBeGreaterThan(0);
 
-      const attackUnitTypes = [
-        UnitType.AtomBomb,
-        UnitType.MIRV,
-        UnitType.HydrogenBomb,
-        UnitType.Warship,
-      ];
+      const attackUnitTypes = [UnitType.Warship];
       const returnedUnitTypes = subMenu.map((item) => {
         const unitTypeStr = item.id.replace("attack_", "");
         return Object.values(UnitType).find(
@@ -238,7 +199,7 @@ describe("RadialMenuElements", () => {
 
       const subMenu = attackMenuElement.subMenu!(mockParams);
 
-      const constructionUnitTypes = [UnitType.City, UnitType.Factory];
+      const constructionUnitTypes = [UnitType.City, UnitType.Mine];
       const returnedUnitTypes = subMenu.map((item) => {
         const unitTypeStr = item.id.replace("attack_", "");
         return Object.values(UnitType).find(
@@ -281,7 +242,7 @@ describe("RadialMenuElements", () => {
       expect(subMenu).toBeDefined();
       expect(subMenu.length).toBeGreaterThan(0);
 
-      const constructionUnitTypes = [UnitType.City, UnitType.Factory];
+      const constructionUnitTypes = [UnitType.City, UnitType.Mine];
       const returnedUnitTypes = subMenu.map((item) => {
         const unitTypeStr = item.id.replace("build_", "");
         return Object.values(UnitType).find(
@@ -297,12 +258,7 @@ describe("RadialMenuElements", () => {
     it("should not include attack units in build menu", () => {
       const subMenu = buildMenuElement.subMenu!(mockParams);
 
-      const attackUnitTypes = [
-        UnitType.AtomBomb,
-        UnitType.MIRV,
-        UnitType.HydrogenBomb,
-        UnitType.Warship,
-      ];
+      const attackUnitTypes = [UnitType.Warship];
       const returnedUnitTypes = subMenu.map((item) => {
         const unitTypeStr = item.id.replace("build_", "");
         return Object.values(UnitType).find(
@@ -513,15 +469,15 @@ describe("RadialMenuElements", () => {
 
       const subMenu = attackMenuElement.subMenu!(mockParams);
 
-      const atomBombElement = subMenu.find(
-        (item) => item.id === "attack_Atom Bomb",
+      const warshipElement = subMenu.find(
+        (item) => item.id === "attack_Warship",
       );
 
-      expect(atomBombElement).toBeDefined();
-      expect(atomBombElement!.action).toBeDefined();
+      expect(warshipElement).toBeDefined();
+      expect(warshipElement!.action).toBeDefined();
 
-      if (atomBombElement!.action) {
-        atomBombElement!.action(mockParams);
+      if (warshipElement!.action) {
+        warshipElement!.action(mockParams);
         expect(mockParams.eventBus.emit).toHaveBeenCalledWith(
           expect.any(BuildUnitIntentEvent),
         );
@@ -593,88 +549,6 @@ describe("RadialMenuElements", () => {
       ]);
     });
 
-    it("caps the nuke bulk amount at loaded silo tubes", () => {
-      const enemyPlayer = {
-        id: () => 2,
-        isPlayer: vi.fn(() => true),
-      } as unknown as PlayerView;
-      mockParams.selected = enemyPlayer;
-
-      const subMenu = attackMenuElement.subMenu!(mockParams);
-      const atomBombElement = subMenu.find(
-        (item) => item.id === "attack_Atom Bomb",
-      );
-
-      const slotIds = [
-        `upgrade_${UnitType.AtomBomb}_1`,
-        `upgrade_${UnitType.AtomBomb}_2`,
-        `upgrade_${UnitType.AtomBomb}_5`,
-        `upgrade_${UnitType.AtomBomb}_max`,
-      ];
-
-      // Gold for five bombs but only two loaded tubes (level-2 silo):
-      // fixed x1/x2/x5/xMax slots, x5 disabled, max fires 2.
-      (mockGame as any).myPlayer = vi.fn(() => ({
-        gold: () => 1_000_000n,
-        readyMissileCount: () => 2,
-      }));
-      let options = atomBombElement!.subMenu!(mockParams);
-      expect(options.map((o) => o.id)).toEqual(slotIds);
-      expect(options.map((o) => o.disabled(mockParams))).toEqual([
-        false,
-        false,
-        true,
-        false,
-      ]);
-      options[3].action!(mockParams);
-      expect(mockParams.eventBus.emit).toHaveBeenLastCalledWith(
-        expect.objectContaining({ amount: 2 }),
-      );
-
-      // Gold for three bombs and plenty of tubes: gold caps the max at 3.
-      (mockGame as any).myPlayer = vi.fn(() => ({
-        gold: () => 350n,
-        readyMissileCount: () => 10,
-      }));
-      options = atomBombElement!.subMenu!(mockParams);
-      expect(options.map((o) => o.id)).toEqual(slotIds);
-      expect(options.map((o) => o.disabled(mockParams))).toEqual([
-        false,
-        false,
-        true,
-        false,
-      ]);
-      options[3].action!(mockParams);
-      expect(mockParams.eventBus.emit).toHaveBeenLastCalledWith(
-        expect.objectContaining({ amount: 3 }),
-      );
-
-      // A single loaded tube: no submenu — the click launches one bomb.
-      (mockGame as any).myPlayer = vi.fn(() => ({
-        gold: () => 1_000_000n,
-        readyMissileCount: () => 1,
-      }));
-      expect(atomBombElement!.subMenu!(mockParams)).toHaveLength(0);
-
-      // Plenty of gold and 12 loaded tubes: every slot executable, max
-      // fires 12.
-      (mockGame as any).myPlayer = vi.fn(() => ({
-        gold: () => 1_000_000n,
-        readyMissileCount: () => 12,
-      }));
-      options = atomBombElement!.subMenu!(mockParams);
-      expect(options.map((o) => o.id)).toEqual(slotIds);
-      expect(options.map((o) => o.disabled(mockParams))).toEqual([
-        false,
-        false,
-        false,
-        false,
-      ]);
-      options[3].action!(mockParams);
-      expect(mockParams.eventBus.emit).toHaveBeenLastCalledWith(
-        expect.objectContaining({ amount: 12 }),
-      );
-    });
   });
 
   describe("Menu element tooltips", () => {
@@ -700,18 +574,18 @@ describe("RadialMenuElements", () => {
       mockParams.selected = enemyPlayer;
 
       const subMenu = attackMenuElement.subMenu!(mockParams);
-      const atomBombElement = subMenu.find(
-        (item) => item.id === "attack_Atom Bomb",
+      const warshipElement = subMenu.find(
+        (item) => item.id === "attack_Warship",
       );
 
-      expect(atomBombElement!.tooltipItems).toBeDefined();
-      expect(atomBombElement!.tooltipItems!.length).toBeGreaterThan(0);
+      expect(warshipElement!.tooltipItems).toBeDefined();
+      expect(warshipElement!.tooltipItems!.length).toBeGreaterThan(0);
 
-      const tooltipTexts = atomBombElement!.tooltipItems!.map(
+      const tooltipTexts = warshipElement!.tooltipItems!.map(
         (item) => item.text,
       );
-      expect(tooltipTexts).toContain("unit_type.atom_bomb");
-      expect(tooltipTexts).toContain("unit_type.atom_bomb_desc");
+      expect(tooltipTexts).toContain("unit_type.warship");
+      expect(tooltipTexts).toContain("unit_type.warship_desc");
       expect(tooltipTexts.some((text) => text.includes("100"))).toBe(true);
     });
   });
@@ -736,12 +610,12 @@ describe("RadialMenuElements", () => {
       mockParams.selected = enemyPlayer;
 
       const subMenu = attackMenuElement.subMenu!(mockParams);
-      const atomBombElement = subMenu.find(
-        (item) => item.id === "attack_Atom Bomb",
+      const warshipElement = subMenu.find(
+        (item) => item.id === "attack_Warship",
       );
 
       expect(
-        (atomBombElement!.color as (params: MenuElementParams) => string)(
+        (warshipElement!.color as (params: MenuElementParams) => string)(
           mockParams,
         ),
       ).toBe(COLORS.attack);
@@ -792,12 +666,8 @@ describe("RadialMenuElements", () => {
 
       attackMenuElement.subMenu!(mockParams);
 
-      expect(translateText).toHaveBeenCalledWith("unit_type.atom_bomb");
-      expect(translateText).toHaveBeenCalledWith("unit_type.atom_bomb_desc");
-      expect(translateText).toHaveBeenCalledWith("unit_type.hydrogen_bomb");
-      expect(translateText).toHaveBeenCalledWith(
-        "unit_type.hydrogen_bomb_desc",
-      );
+      expect(translateText).toHaveBeenCalledWith("unit_type.warship");
+      expect(translateText).toHaveBeenCalledWith("unit_type.warship_desc");
     });
   });
 });

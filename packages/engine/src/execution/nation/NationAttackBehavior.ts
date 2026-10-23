@@ -31,9 +31,9 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../../snapshot/SnapshotContext";
-import { AttackExecution } from "../AttackExecution";
+import { ArmyExecution } from "../ArmyExecution";
+import { embark } from "../WarshipCargoExecution";
 import { DonateTroopsExecution } from "../DonateTroopExecution";
-import { TransportShipExecution } from "../TransportShipExecution";
 import { AiAttackBehavior, BoatRoute } from "../utils/AiAttackBehavior";
 import { planBotAttacks, walledInBots } from "./BotAnnexation";
 import { NationAllianceBehavior } from "./NationAllianceBehavior";
@@ -48,8 +48,6 @@ import { findJuiciestTarget, findRunawayLeader } from "./NationUtils";
 import type { NationWarshipBehavior } from "./NationWarshipBehavior";
 
 // Reusable neighbor buffer for hot loops; the simulation is single-threaded.
-const NEIGHBOR_SCRATCH: TileRef[] = [0, 0, 0, 0];
-
 type Box = { min: Cell; max: Cell } | null | undefined;
 
 // Fewest tiles between two boxes (unknown boxes count as touching)
@@ -166,15 +164,15 @@ export class NationAttackBehavior extends AiAttackBehavior {
     // Neighbor visit order matters here: the set's insertion order feeds the
     // stable troop-count sort below, so ties keep border-discovery order.
     const borderingPlayerSet = new Set<Player>();
-    let borderHasNonNukedTerraNullius = false;
+    let borderHasTerraNullius = false;
     const smallID = this.player.smallID();
     const visit = (t: number) => {
       if (!this.game.isLand(t) || this.game.isImpassable(t)) return;
       if (this.game.ownerID(t) === smallID) return;
       const owner = this.game.playerBySmallID(this.game.ownerID(t));
       if (owner.isPlayer()) borderingPlayerSet.add(owner);
-      if (!this.game.hasOwner(t) && !this.game.hasFallout(t)) {
-        borderHasNonNukedTerraNullius = true;
+      if (!this.game.hasOwner(t)) {
+        borderHasTerraNullius = true;
       }
     };
     // forEach, not for..of: TileSet.values() is a generator.
@@ -196,11 +194,11 @@ export class NationAttackBehavior extends AiAttackBehavior {
       (o) => this.player?.isFriendly(o) === false,
     );
 
-    // Attack TerraNullius but not nuked territory (direct border or across a river)
-    const hasNonNukedTerraNullius =
-      borderHasNonNukedTerraNullius ||
+    // Attack unowned land (direct border or across a river)
+    const hasTerraNullius =
+      borderHasTerraNullius ||
       playerNeighbors.some((n) => !n.isPlayer());
-    if (hasNonNukedTerraNullius) {
+    if (hasTerraNullius) {
       if (this.sendAttack(this.game.terraNullius())) return;
     }
 
@@ -272,9 +270,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
       return;
     }
 
-    this.game.addExecution(
-      new TransportShipExecution(this.player, dst, troops),
-    );
+    embark(this.game, this.player, dst, troops);
   }
 
   private findRandomBoatTarget(
@@ -484,13 +480,6 @@ export class NationAttackBehavior extends AiAttackBehavior {
     const betray = (): boolean =>
       this.maybeBetrayAndAttack(borderingFriends, borderingEnemies);
 
-    const nuked = (): boolean => {
-      if (this.isBorderingNukedTerritory()) {
-        return this.sendAttack(this.game.terraNullius());
-      }
-      return false;
-    };
-
     const victim = (): boolean => {
       const victim = pick((enemies) => this.findVictim(enemies));
       if (victim) {
@@ -564,17 +553,17 @@ export class NationAttackBehavior extends AiAttackBehavior {
       case Difficulty.Easy:
         // So dumb, they cant even find islanders
         // prettier-ignore
-        return [nuked, bots, retaliate, assist, betray, hated, weakest];
+        return [bots, retaliate, assist, betray, hated, weakest];
       case Difficulty.Medium:
         // prettier-ignore
-        return [bots, nuked, assist, betray, hated, afk, traitor, crown, weakest, island, donate];
+        return [bots, assist, betray, hated, afk, traitor, crown, weakest, island, donate];
       case Difficulty.Hard:
         // Strong veryWeak and juicy strats after the distracting hated strat, to make the nations weaker than impossible
         // prettier-ignore
-        return [bots, assist, betray, nuked, traitor, afk, hated, veryWeak, juicy, victim, crown, weakest, island, donate];
+        return [bots, assist, betray, traitor, afk, hated, veryWeak, juicy, victim, crown, weakest, island, donate];
       case Difficulty.Impossible:
         // prettier-ignore
-        return [bots, veryWeak, betray, assist, victim, crown, traitor, juicy, afk, nuked, hated, weakest, island, donate];
+        return [bots, veryWeak, betray, assist, victim, crown, traitor, juicy, afk, hated, weakest, island, donate];
       default:
         assertNever(difficulty);
     }
@@ -668,7 +657,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
     );
   }
 
-  /** Attacks a player our nuke just hit, while its troops are down. Skips the trigger ratio. */
+  /** Attacks a bordering enemy, skipping the trigger ratio. */
   strike(target: Player): boolean {
     if (
       this.player.isFriendly(target) ||
@@ -777,7 +766,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
     if (troops < 1) return;
     for (const bot of walledInBots(this.game, this.player, bots)) {
       this.game.addExecution(
-        new AttackExecution(troops, this.player, bot.id()),
+        new ArmyExecution(this.player, troops, bot.id()),
       );
     }
   }
@@ -867,30 +856,6 @@ export class NationAttackBehavior extends AiAttackBehavior {
     return false;
   }
 
-  private isBorderingNukedTerritory(): boolean {
-    if (this.game.config().isUnitDisabled(UnitType.MissileSilo)) {
-      return false;
-    }
-
-    // Boolean result, so neighbor order doesn't matter; a reused scratch
-    // buffer keeps this allocation-free and allows early exit.
-    const nbuf = NEIGHBOR_SCRATCH;
-    for (const tile of this.player.borderTiles()) {
-      const n = this.game.neighbors4(tile, nbuf);
-      for (let i = 0; i < n; i++) {
-        const neighbor = nbuf[i];
-        if (
-          this.game.isLand(neighbor) &&
-          !this.game.hasOwner(neighbor) &&
-          this.game.hasFallout(neighbor)
-        ) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   // Find someone who isn't significantly stronger than us and is under big attack from others (50%+ of their troops incoming)
   private findVictim(enemies: Player[]): Player | null {
     // enemies is already sorted by troops (ascending), so first match is weakest victim
@@ -910,7 +875,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
   }
 
   // Find very weak (less than 15% of their maxTroops) enemies
-  // which also don't have significantly more troops than us (to target MIRVed players)
+  // which also don't have significantly more troops than us
   private findVeryWeakEnemy(enemies: Player[]): Player | null {
     const veryWeakEnemies = enemies.filter((enemy) => {
       const enemyMaxTroops = this.game.config().maxTroops(enemy);
@@ -1021,9 +986,9 @@ export class NationAttackBehavior extends AiAttackBehavior {
 
   forceSendAttack(target: Player | TerraNullius) {
     this.game.addExecution(
-      new AttackExecution(
-        this.player.troops() / 2,
+      new ArmyExecution(
         this.player,
+        this.player.troops() / 2,
         target.isPlayer() ? target.id() : this.game.terraNullius().id(),
       ),
     );
@@ -1164,7 +1129,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
       troops = nonBotTroops(reserveTroops);
     }
 
-    // Hard & Impossible: don't drop below neighbor troop threshold (also applies to TerraNullius/fallout).
+    // Hard & Impossible: don't drop below neighbor troop threshold (also applies to TerraNullius).
     troops = Math.min(
       troops,
       target.isPlayer()
@@ -1242,9 +1207,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
     if (target.isPlayer() && target.type() === PlayerType.Bot) {
       this.botAttackTroopsSent += boatTroops - troops;
     }
-    this.game.addExecution(
-      new TransportShipExecution(this.player, landing, boatTroops),
-    );
+    embark(this.game, this.player, landing, boatTroops);
     return true;
   }
 
@@ -1479,7 +1442,6 @@ export class NationAttackBehavior extends AiAttackBehavior {
           isDisconnectedTeammate: false,
         },
         defenderHasDefensePost: false,
-        falloutRatio: null,
         borderSize: 1,
       }).attackerTroopLoss;
     }

@@ -680,8 +680,103 @@ func packTerrain(ctx context.Context, terrain [][]Terrain) (data []byte, numLand
 		}
 	}
 
+	biomes := assignBiomes(terrain)
+	packed := make([]byte, len(packedData)+len(biomes))
+	copy(packed, packedData)
+	copy(packed[len(packedData):], biomes)
 	logBinaryAsBits(ctx, packedData, 8)
-	return packedData, numLandTiles
+	return packed, numLandTiles
+}
+
+// Biome bytes match the TypeScript TerrainType enum.
+const (
+	biomePlains     = 0
+	biomeMountain   = 2
+	biomeOcean      = 3
+	biomeImpassable = 4
+	biomeCoast      = 5
+	biomeForest     = 6
+	biomeLush       = 7
+	biomeDesert     = 8
+	biomeNearWater  = 8
+	biomeFarWater   = 24
+)
+
+func assignBiomes(terrain [][]Terrain) []byte {
+	width := len(terrain)
+	height := len(terrain[0])
+	dist := make([]int, width*height)
+	for i := range dist {
+		dist[i] = -1
+	}
+	queue := make([]int, 0, width*height)
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			if terrain[x][y].Type != Land && terrain[x][y].Type != Impassable {
+				i := y*width + x
+				dist[i] = 0
+				queue = append(queue, i)
+			}
+		}
+	}
+	for qh := 0; qh < len(queue); qh++ {
+		cur := queue[qh]
+		x := cur % width
+		y := cur / width
+		d := dist[cur]
+		push := func(nx, ny int) {
+			if nx < 0 || ny < 0 || nx >= width || ny >= height {
+				return
+			}
+			ni := ny*width + nx
+			if dist[ni] != -1 {
+				return
+			}
+			dist[ni] = d + 1
+			queue = append(queue, ni)
+		}
+		push(x-1, y)
+		push(x+1, y)
+		push(x, y-1)
+		push(x, y+1)
+	}
+	out := make([]byte, width*height)
+	for x := 0; x < width; x++ {
+		for y := 0; y < height; y++ {
+			tile := terrain[x][y]
+			i := y*width + x
+			mag := int(math.Ceil(tile.Magnitude))
+			if tile.Type != Land && tile.Type != Impassable {
+				out[i] = biomeOcean
+				continue
+			}
+			if tile.Type == Impassable || mag >= 31 {
+				out[i] = biomeImpassable
+				continue
+			}
+			if tile.Shoreline && mag < 20 {
+				out[i] = biomeCoast
+				continue
+			}
+			if mag >= 20 {
+				out[i] = biomeMountain
+				continue
+			}
+			if mag >= 10 {
+				out[i] = biomeForest
+				continue
+			}
+			d := dist[i]
+			if d != -1 && d <= biomeNearWater {
+				out[i] = biomeLush
+			} else if d == -1 || d > biomeFarWater {
+				out[i] = biomeDesert
+			} else {
+				out[i] = biomePlains
+			}
+		}
+	}
+	return out
 }
 
 // createMapThumbnail generates an RGBA image representation of the terrain.

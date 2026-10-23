@@ -41,7 +41,6 @@ function createSidebar(overrides: Partial<TimerState> = {}) {
   const eventBus = new EventBus();
   const game = {
     config: () => ({
-      doomsdayClockConfig: () => undefined,
       // The overtime panel is embedded in the sidebar's template, so its
       // config read must exist even though these tests keep the mode off.
       overtimeConfig: () => ({ enabled: false, startMinutes: 30 }),

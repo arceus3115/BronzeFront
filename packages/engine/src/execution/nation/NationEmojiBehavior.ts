@@ -376,23 +376,6 @@ export function respondToEmoji(
   }
 }
 
-export function respondToMIRV(
-  game: Game,
-  random: PseudoRandom,
-  mirvTarget: Player,
-) {
-  if (!random.chance(8)) return;
-  if (!mirvTarget.canSendEmoji(AllPlayers)) return;
-
-  game.addExecution(
-    new EmojiExecution(
-      mirvTarget,
-      AllPlayers,
-      random.randElement(EMOJI_OVERWHELMED),
-    ),
-  );
-}
-
 export const NationEmojiBehaviorSnapshot = snapshotType({
   name: "NationEmojiBehavior",
   version: 1,

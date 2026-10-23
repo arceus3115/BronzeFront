@@ -3,7 +3,7 @@ import {
   PlayerType,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
-import { ShellExecution } from "@openfront/engine/execution/ShellExecution";
+import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
 import { Game, Player, Unit } from "@openfront/engine/game/Game";
 import { setup } from "./util/Setup";
 
@@ -156,69 +156,22 @@ describe("Warship veterancy", () => {
     expect(transport.veterancy()).toBe(0);
   });
 
-  test("shell damage scales with the firing warship's veterancy", () => {
-    const maxVet = game.config().warshipMaxVeterancy();
-    const bonusPercent = game.config().warshipVeterancyShellDamageBonus();
-    const target = buildWarship(defender, coastX + 5, 10);
-
-    const baseShooter = buildWarship(attacker, coastX, 10);
-    const vetShooter = buildWarship(attacker, coastX + 1, 10);
-    for (let i = 0; i < maxVet; i++) {
-      vetShooter.recordKill(UnitType.Warship);
-    }
-    expect(vetShooter.veterancy()).toBe(maxVet);
-
-    const boostedValues = new Set<number>();
-    for (let i = 0; i < 30; i++) {
-      // Advance the tick so each pair of shells rolls a different seed.
-      game.executeNextTick();
-
-      const baseShell = new ShellExecution(
-        baseShooter.tile(),
-        attacker,
-        baseShooter,
-        target,
-      );
-      const vetShell = new ShellExecution(
-        vetShooter.tile(),
-        attacker,
-        vetShooter,
-        target,
-      );
-      baseShell.init(game, game.ticks());
-      vetShell.init(game, game.ticks());
-
-      const dBase = baseShell.getEffectOnTargetForTesting();
-      const dVet = vetShell.getEffectOnTargetForTesting();
-
-      // Same seed → same roll. Base damage is 250, so dBase equals the rolled
-      // multiplier and the veteran's shot is the integer-boosted value.
-      expect(dVet).toBe(
-        Math.floor((dBase * (100 + maxVet * bonusPercent)) / 100),
-      );
-      boostedValues.add(dVet);
-    }
-
-    // The roll varied across ticks (not a constant).
-    expect(boostedValues.size).toBeGreaterThan(1);
-  });
-
-  test("a shell landing the killing blow awards veterancy to the firing warship", () => {
+  test("a warship tick in combat does not add a shell unit", () => {
     const shooter = buildWarship(attacker, coastX, 10);
     const target = buildWarship(defender, coastX + 1, 10);
+    game.addExecution(new WarshipExecution(shooter));
+    shooter.setTargetUnit(target);
 
-    // Leave the target on its last sliver of health so any shell finishes it.
-    target.modifyHealth(-(target.health() - 1));
-    expect(target.health()).toBe(1);
+    const before = game.units().length;
+    game.executeNextTick();
 
-    game.addExecution(
-      new ShellExecution(shooter.tile(), attacker, shooter, target),
-    );
-    for (let i = 0; i < 30 && target.isActive(); i++) {
-      game.executeNextTick();
-    }
-
-    expect(target.isActive()).toBe(false);
-    expect(shooter.veterancy()).toBe(1);
+    const units = game.units();
+    const allowed = new Set<string>(Object.values(UnitType));
+    expect(units).toHaveLength(before);
+    expect(units.every((unit) => allowed.has(unit.type()))).toBe(true);
+    expect(units.map((unit) => unit.type())).toEqual([
+      UnitType.Warship,
+      UnitType.Warship,
+    ]);
   });
 });

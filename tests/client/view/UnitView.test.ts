@@ -187,14 +187,6 @@ describe("UnitView accessors", () => {
     expect(u.targetTile()).toBe(12);
   });
 
-  it("missileTimerQueue() forwards the array", () => {
-    const game = makeGameView();
-    const u = new UnitView(
-      game,
-      makeUnitUpdate({ missileTimerQueue: [10, 20, 30] }),
-    );
-    expect(u.missileTimerQueue()).toEqual([10, 20, 30]);
-  });
 
   it("touch / updateWarshipState / updateTransportShipState throw on view", () => {
     const game = makeGameView();
@@ -204,55 +196,4 @@ describe("UnitView accessors", () => {
     expect(() => u.updateTransportShipState({ isRetreating: false })).toThrow();
   });
 
-  describe("missileReadinesss", () => {
-    it("returns 1 when nothing is reloading", () => {
-      const game = makeGameView();
-      const u = new UnitView(
-        game,
-        makeUnitUpdate({ level: 3, missileTimerQueue: [] }),
-      );
-      expect(u.missileReadinesss()).toBe(1);
-    });
-
-    it("returns 0 when all missiles are reloading and level > 1", () => {
-      const game = makeGameView({ config: stubConfig() });
-      const u = new UnitView(
-        game,
-        makeUnitUpdate({
-          unitType: UnitType.SAMLauncher,
-          level: 2,
-          missileTimerQueue: [0, 0], // both reloading, started at tick 0
-        }),
-      );
-      // Just-launched: progress is 0, readiness 0/2.
-      expect(u.missileReadinesss()).toBe(0);
-    });
-
-    it("returns partial readiness when missiles are partway through cooldown", () => {
-      // SAMCooldown = 120 in stub. Half-way at tick 60. Level 2 with both reloading
-      // means readiness = 0/2 from ready missiles + 2 * (60/120) / 2 = 0.5.
-      // But game.ticks() returns 0 with no update. So progress = 0 - 0 = 0 → 0.
-      // Use a game with a tick number injected.
-      const config = stubConfig({
-        SAMCooldown: () => 120,
-        SiloCooldown: () => 75,
-      } as unknown as Partial<
-        typeof stubConfig extends () => infer C ? C : never
-      >);
-      const game = makeGameView({ config });
-      const u = new UnitView(
-        game,
-        makeUnitUpdate({
-          unitType: UnitType.SAMLauncher,
-          level: 2,
-          missileTimerQueue: [0, 0],
-        }),
-      );
-      // Without advancing game ticks, readiness = (2-2)/2 + 2*((0-0)/120)/2 = 0.
-      // We can't easily advance ticks without going through update(); just assert <=1.
-      const r = u.missileReadinesss();
-      expect(r).toBeGreaterThanOrEqual(0);
-      expect(r).toBeLessThanOrEqual(1);
-    });
-  });
 });

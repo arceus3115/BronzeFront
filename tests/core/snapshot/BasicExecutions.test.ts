@@ -20,7 +20,7 @@ import { EmbargoExecution } from "@openfront/engine/execution/EmbargoExecution";
 import { EmojiExecution } from "@openfront/engine/execution/EmojiExecution";
 import { FactoryExecution } from "@openfront/engine/execution/FactoryExecution";
 import { MarkDisconnectedExecution } from "@openfront/engine/execution/MarkDisconnectedExecution";
-import { MissileSiloExecution } from "@openfront/engine/execution/MissileSiloExecution";
+import { PortExecution } from "@openfront/engine/execution/PortExecution";
 import { MoveWarshipExecution } from "@openfront/engine/execution/MoveWarshipExecution";
 import { PauseExecution } from "@openfront/engine/execution/PauseExecution";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
@@ -215,12 +215,12 @@ describe("basic execution snapshots", () => {
     test("structure executions", async () => {
       const city = a.buildUnit(UnitType.City, game.ref(10, 10), {});
       const post = a.buildUnit(UnitType.DefensePost, game.ref(15, 10), {});
-      const silo = b.buildUnit(UnitType.MissileSilo, game.ref(50, 10), {});
-      const factory = c.buildUnit(UnitType.Factory, game.ref(10, 50), {});
+      const portUnit = b.buildUnit(UnitType.Port, game.ref(50, 10), {});
+      const factory = c.buildUnit(UnitType.Mine, game.ref(10, 50), {});
       game.addExecution(
         new CityExecution(city),
         new DefensePostExecution(post),
-        new MissileSiloExecution(silo),
+        new PortExecution(portUnit),
         new FactoryExecution(factory),
         new UpgradeStructureExecution(a, city.id(), 2),
         new UpgradeStructureExecution(a, 99999),
@@ -235,14 +235,14 @@ describe("basic execution snapshots", () => {
       while (!a.canDeleteUnit()) game.executeNextTick();
       game.addExecution(
         new DeleteUnitExecution(a, city.id()),
-        new DeleteUnitExecution(a, silo.id()),
+        new DeleteUnitExecution(a, portUnit.id()),
       );
       await expectSnapshotRoundTrip(game, MAP, 0);
       game.executeNextTick();
       game.executeNextTick();
       await expectSnapshotRoundTrip(game, MAP, 12);
       expect(city.isActive()).toBe(false);
-      expect(silo.isActive()).toBe(true); // Not Alice's to delete.
+      expect(portUnit.isActive()).toBe(true); // Not Alice's to delete.
 
       // The dead city is still referenced by the finished CityExecution.
       post.delete();

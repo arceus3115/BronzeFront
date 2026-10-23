@@ -177,27 +177,6 @@ describe("Stats", () => {
     });
   });
 
-  test("bombLaunch", () => {
-    stats.bombLaunch(player1, player2, UnitType.AtomBomb);
-    expect(stats.stats()).toStrictEqual({
-      client1: { bombs: { abomb: [1n] } },
-    });
-  });
-
-  test("bombLand", () => {
-    stats.bombLand(player1, player2, UnitType.HydrogenBomb);
-    expect(stats.stats()).toStrictEqual({
-      client1: { bombs: { hbomb: [0n, 1n] } },
-    });
-  });
-
-  test("bombIntercept", () => {
-    stats.bombIntercept(player1, UnitType.MIRVWarhead, 1);
-    expect(stats.stats()).toStrictEqual({
-      client1: { bombs: { mirvw: [0n, 0n, 1n] } },
-    });
-  });
-
   test("goldWar", () => {
     stats.goldWar(player1, player2, 1);
     expect(stats.stats()).toStrictEqual({
@@ -250,11 +229,11 @@ describe("Stats", () => {
   });
 
   test("unitDestroy", () => {
-    stats.unitDestroy(player1, UnitType.MissileSilo);
+    stats.unitDestroy(player1, UnitType.Mine);
     expect(stats.stats()).toStrictEqual({
       client1: {
         units: {
-          silo: [0n, 1n],
+          mine: [0n, 1n],
         },
       },
     });

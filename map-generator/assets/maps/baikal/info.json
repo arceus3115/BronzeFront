@@ -5,7 +5,6 @@
   "categories": ["asia"],
   "ffa_frequency": 5,
   "special_team_count": 2,
-  "forced_modifiers": ["isWaterNukes:50"],
   "themes": ["asia"],
   "nations": [
     {

@@ -11,7 +11,6 @@ import {
   Trios,
 } from "@openfront/engine-api/game/GameTypes";
 import { GameConfig } from "@openfront/engine-api/Schemas";
-import { DoomsdayClockSpeed } from "@openfront/engine-lib/game/DoomsdayClock";
 import { stripVersionPrefix } from "@openfront/shared/ServerList";
 import IntlMessageFormat from "intl-messageformat";
 import { ClientEnv } from "./ClientEnv";
@@ -147,7 +146,6 @@ export interface ModifierInfo {
  */
 export function getActiveModifiers(
   modifiers: PublicGameModifiers | undefined,
-  doomsdayClockSpeed?: DoomsdayClockSpeed,
 ): ModifierInfo[] {
   if (!modifiers) return [];
   const result: ModifierInfo[] = [];
@@ -213,44 +211,11 @@ export function getActiveModifiers(
       badgeKey: "public_game_modifier.ports_disabled",
     });
   }
-  if (modifiers.isNukesDisabled) {
-    result.push({
-      labelKey: "public_game_modifier.nukes_disabled_label",
-      badgeKey: "public_game_modifier.nukes_disabled",
-    });
-  }
-  if (modifiers.isSAMsDisabled) {
-    result.push({
-      labelKey: "public_game_modifier.sams_disabled_label",
-      badgeKey: "public_game_modifier.sams_disabled",
-    });
-  }
   if (modifiers.isPeaceTime) {
     result.push({
       labelKey: "public_game_modifier.peace_time_label",
       badgeKey: "public_game_modifier.peace_time",
     });
-  }
-  if (modifiers.isWaterNukes) {
-    result.push({
-      labelKey: "game_settings.water_nukes",
-      badgeKey: "public_game_modifier.water_nukes",
-    });
-  }
-  if (modifiers.isDoomsdayClock) {
-    const info: ModifierInfo = {
-      labelKey: "game_settings.doomsday_clock",
-      badgeKey: "public_game_modifier.doomsday_clock",
-    };
-    // Name the preset when we know it; older payloads / non-rotation lobbies
-    // may not carry a speed, so keep the plain badge as a fallback.
-    if (doomsdayClockSpeed !== undefined) {
-      info.badgeKey = "public_game_modifier.doomsday_clock_with_speed";
-      info.badgeParams = {
-        speed: translateText(`doomsday_clock_speed.${doomsdayClockSpeed}`),
-      };
-    }
-    result.push(info);
   }
   return result;
 }
@@ -260,9 +225,8 @@ export function getActiveModifiers(
  */
 export function getModifierLabels(
   modifiers: PublicGameModifiers | undefined,
-  doomsdayClockSpeed?: DoomsdayClockSpeed,
 ): string[] {
-  return getActiveModifiers(modifiers, doomsdayClockSpeed).map((m) =>
+  return getActiveModifiers(modifiers).map((m) =>
     translateText(m.badgeKey, m.badgeParams),
   );
 }
@@ -623,7 +587,6 @@ export const severityColors: Record<string, string> = {
  */
 export function getMessageTypeClasses(type: MessageType): string {
   switch (type) {
-    case MessageType.SAM_HIT:
     case MessageType.CAPTURED_ENEMY_UNIT:
     case MessageType.CONQUERED_PLAYER:
     case MessageType.ALLIANCE_ACCEPTED:
@@ -632,17 +595,12 @@ export function getMessageTypeClasses(type: MessageType): string {
     case MessageType.ALLIANCE_REJECTED:
     case MessageType.ALLIANCE_BROKEN:
     case MessageType.UNIT_DESTROYED:
-    case MessageType.NUKE_DETONATED:
       return severityColors["fail"];
     case MessageType.ATTACK_CANCELLED:
     case MessageType.ATTACK_REQUEST:
     case MessageType.DONATION_SENT:
     case MessageType.DONATION_RECEIVED:
       return severityColors["blue"];
-    case MessageType.MIRV_INBOUND:
-    case MessageType.NUKE_INBOUND:
-    case MessageType.HYDROGEN_BOMB_INBOUND:
-    case MessageType.SAM_MISS:
     case MessageType.ALLIANCE_EXPIRED:
     case MessageType.NAVAL_INVASION_INBOUND:
     case MessageType.RENEW_ALLIANCE:

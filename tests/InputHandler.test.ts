@@ -106,7 +106,6 @@ describe("InputHandler AutoUpgrade", () => {
       {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
         upgradeMultiplier: 1,
       },
       mockCanvas,
@@ -991,7 +990,6 @@ describe("InputHandler AutoUpgrade", () => {
       uiState = {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
       } as UIState;
       inputHandler = new InputHandler(
         mockGameView,
@@ -1015,7 +1013,7 @@ describe("InputHandler AutoUpgrade", () => {
 
     test("emits ConfirmGhostStructureEvent on NumpadEnter when ghost structure is set", () => {
       const mockEmit = vi.spyOn(eventBus, "emit");
-      uiState.ghostStructure = UnitType.Factory;
+      uiState.ghostStructure = UnitType.Mine;
 
       window.dispatchEvent(
         new KeyboardEvent("keydown", { code: "NumpadEnter" }),
@@ -1045,7 +1043,6 @@ describe("InputHandler AutoUpgrade", () => {
       const uiState: UIState = {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
       } as UIState;
       inputHandler = new InputHandler(
         mockGameView,
@@ -1063,19 +1060,6 @@ describe("InputHandler AutoUpgrade", () => {
       expect(inputHandler["uiState"].ghostStructure).toBe(UnitType.City);
     });
 
-    test("Numpad5 sets ghost structure to MissileSilo when buildMissileSilo is Digit5", () => {
-      window.dispatchEvent(
-        new KeyboardEvent("keyup", { code: "Numpad5", key: "5" }),
-      );
-      expect(inputHandler["uiState"].ghostStructure).toBe(UnitType.MissileSilo);
-    });
-
-    test("Numpad0 sets ghost structure to MIRV when buildMIRV is Digit0", () => {
-      window.dispatchEvent(
-        new KeyboardEvent("keyup", { code: "Numpad0", key: "0" }),
-      );
-      expect(inputHandler["uiState"].ghostStructure).toBe(UnitType.MIRV);
-    });
 
     test("does not set ghost structure when the player is dead", () => {
       mockGameView.myPlayer = () =>
@@ -1094,12 +1078,10 @@ describe("InputHandler AutoUpgrade", () => {
       inputHandler.destroy();
       testSettings.setKeybinds({
         buildCity: "Numpad1",
-        buildMIRV: "Numpad0",
       });
       const uiState: UIState = {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
       } as UIState;
       inputHandler = new InputHandler(
         mockGameView,
@@ -1114,12 +1096,6 @@ describe("InputHandler AutoUpgrade", () => {
         new KeyboardEvent("keyup", { code: "Digit1", key: "1" }),
       );
       expect(inputHandler["uiState"].ghostStructure).toBe(UnitType.City);
-    });
-    test("Digit0 sets ghost structrue to MIRV when buildMIRV is Numpad0", () => {
-      window.dispatchEvent(
-        new KeyboardEvent("keyup", { code: "Digit0", key: "0" }),
-      );
-      expect(inputHandler["uiState"].ghostStructure).toBe(UnitType.MIRV);
     });
   });
 
@@ -1151,7 +1127,6 @@ describe("InputHandler AutoUpgrade", () => {
       const uiState: UIState = {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
       } as UIState;
       inputHandler = new InputHandler(
         mockGameView,
@@ -1162,16 +1137,15 @@ describe("InputHandler AutoUpgrade", () => {
       inputHandler.initialize();
     });
 
-    test("exact code match wins: Digit1 sets City when buildCity=Digit1 and buildFactory=Numpad1", () => {
+    test("exact code match wins: Digit1 sets City when buildCity=Digit1 and buildFarm=Numpad1", () => {
       testSettings.setKeybinds({
         buildCity: "Digit1",
-        buildFactory: "Numpad1",
+        buildFarm: "Numpad1",
       });
       inputHandler.destroy();
       const uiState: UIState = {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
       } as UIState;
       inputHandler = new InputHandler(
         mockGameView,
@@ -1188,16 +1162,15 @@ describe("InputHandler AutoUpgrade", () => {
       expect(inputHandler["uiState"].ghostStructure).toBe(UnitType.City);
     });
 
-    test("exact code match wins: Numpad1 sets Factory when buildCity=Digit1 and buildFactory=Numpad1", () => {
+    test("exact code match wins: Numpad1 sets Farm when buildCity=Digit1 and buildFarm=Numpad1", () => {
       testSettings.setKeybinds({
         buildCity: "Digit1",
-        buildFactory: "Numpad1",
+        buildFarm: "Numpad1",
       });
       inputHandler.destroy();
       const uiState: UIState = {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
       } as UIState;
       inputHandler = new InputHandler(
         mockGameView,
@@ -1211,7 +1184,7 @@ describe("InputHandler AutoUpgrade", () => {
         new KeyboardEvent("keyup", { code: "Numpad1", key: "1" }),
       );
 
-      expect(inputHandler["uiState"].ghostStructure).toBe(UnitType.Factory);
+      expect(inputHandler["uiState"].ghostStructure).toBe(UnitType.Farm);
     });
 
     test("digit alias used when no exact match: Numpad1 sets City when only buildCity=Digit1", () => {
@@ -1220,7 +1193,6 @@ describe("InputHandler AutoUpgrade", () => {
       const uiState: UIState = {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
       } as UIState;
       inputHandler = new InputHandler(
         mockGameView,
@@ -1246,7 +1218,6 @@ describe("InputHandler AutoUpgrade", () => {
       uiState = {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
       } as UIState;
     });
 
@@ -1329,7 +1300,7 @@ describe("InputHandler AutoUpgrade", () => {
     test("Shift+Digit1 and Digit1 can be bound to different actions without conflict", () => {
       testSettings.setKeybinds({
         buildCity: "Digit1",
-        buildFactory: "Shift+Digit1",
+        buildFarm: "Shift+Digit1",
       });
       inputHandler = new InputHandler(
         mockGameView,
@@ -1349,7 +1320,7 @@ describe("InputHandler AutoUpgrade", () => {
       window.dispatchEvent(
         new KeyboardEvent("keyup", { code: "Digit1", shiftKey: true }),
       );
-      expect(uiState.ghostStructure).toBe(UnitType.Factory);
+      expect(uiState.ghostStructure).toBe(UnitType.Farm);
     });
 
     test("Numpad alias works with Shift+Digit keybind", () => {
@@ -1378,7 +1349,6 @@ describe("InputHandler AutoUpgrade", () => {
         {
           attackRatio: 20,
           ghostStructure: null,
-          rocketDirectionUp: true,
           upgradeMultiplier: 1,
         },
         mockCanvas,
@@ -1411,7 +1381,6 @@ describe("InputHandler AutoUpgrade", () => {
         {
           attackRatio: 20,
           ghostStructure: null,
-          rocketDirectionUp: true,
           upgradeMultiplier: 1,
         },
         mockCanvas,
@@ -1496,7 +1465,6 @@ describe("InputHandler AutoUpgrade", () => {
         {
           attackRatio: 20,
           ghostStructure: null,
-          rocketDirectionUp: true,
           upgradeMultiplier: 1,
         },
         mockCanvas,
@@ -1631,7 +1599,6 @@ describe("Warship box selection (Shift+drag)", () => {
     uiState = {
       attackRatio: 20,
       ghostStructure: null,
-      rocketDirectionUp: true,
     } as UIState;
     inputHandler = new InputHandler(
       mockGameView,
@@ -1816,7 +1783,6 @@ describe("InputHandler right-click cancels unit selection (#4692)", () => {
       {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
         upgradeMultiplier: 1,
       },
       canvas,
@@ -1931,7 +1897,6 @@ describe("InputHandler teardown (OPE-411)", () => {
       {
         attackRatio: 20,
         ghostStructure: null,
-        rocketDirectionUp: true,
         upgradeMultiplier: 1,
       },
       canvas,

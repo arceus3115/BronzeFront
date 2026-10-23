@@ -3,7 +3,12 @@ import { AllianceExtensionExecutionSnapshot } from "../execution/alliance/Allian
 import { AllianceRejectExecutionSnapshot } from "../execution/alliance/AllianceRejectExecution";
 import { AllianceRequestExecutionSnapshot } from "../execution/alliance/AllianceRequestExecution";
 import { BreakAllianceExecutionSnapshot } from "../execution/alliance/BreakAllianceExecution";
+import { ArmyExecutionSnapshot, OrderArmyExecutionSnapshot } from "../execution/ArmyExecution";
 import { AttackExecutionSnapshot } from "../execution/AttackExecution";
+import {
+  ExchangeExecutionSnapshot,
+  ResearchExecutionSnapshot,
+} from "../execution/BronzeTechExecution";
 import { BoatRetreatExecutionSnapshot } from "../execution/BoatRetreatExecution";
 import { CityExecutionSnapshot } from "../execution/CityExecution";
 import { ConstructionExecutionSnapshot } from "../execution/ConstructionExecution";
@@ -11,27 +16,20 @@ import { DefensePostExecutionSnapshot } from "../execution/DefensePostExecution"
 import { DeleteUnitExecutionSnapshot } from "../execution/DeleteUnitExecution";
 import { DonateGoldExecutionSnapshot } from "../execution/DonateGoldExecution";
 import { DonateTroopsExecutionSnapshot } from "../execution/DonateTroopExecution";
-import { DoomsdayClockExecutionSnapshot } from "../execution/DoomsdayClockExecution";
 import { EmbargoAllExecutionSnapshot } from "../execution/EmbargoAllExecution";
 import { EmbargoExecutionSnapshot } from "../execution/EmbargoExecution";
 import { EmojiExecutionSnapshot } from "../execution/EmojiExecution";
 import { FactoryExecutionSnapshot } from "../execution/FactoryExecution";
 import { MarkDisconnectedExecutionSnapshot } from "../execution/MarkDisconnectedExecution";
-import { MirvExecutionSnapshot } from "../execution/MIRVExecution";
-import { MissileSiloExecutionSnapshot } from "../execution/MissileSiloExecution";
 import { MoveWarshipExecutionSnapshot } from "../execution/MoveWarshipExecution";
 import { NationExecutionSnapshot } from "../execution/NationExecution";
 import { NoOpExecutionSnapshot } from "../execution/NoOpExecution";
-import { NukeExecutionSnapshot } from "../execution/NukeExecution";
 import { PauseExecutionSnapshot } from "../execution/PauseExecution";
 import { PlayerExecutionSnapshot } from "../execution/PlayerExecution";
 import { PortExecutionSnapshot } from "../execution/PortExecution";
 import { QuickChatExecutionSnapshot } from "../execution/QuickChatExecution";
 import { RecomputeRailClusterExecutionSnapshot } from "../execution/RecomputeRailClusterExecution";
 import { RetreatExecutionSnapshot } from "../execution/RetreatExecution";
-import { SAMLauncherExecutionSnapshot } from "../execution/SAMLauncherExecution";
-import { SAMMissileExecutionSnapshot } from "../execution/SAMMissileExecution";
-import { ShellExecutionSnapshot } from "../execution/ShellExecution";
 import { SpawnExecutionSnapshot } from "../execution/SpawnExecution";
 import { SpawnTimerExecutionSnapshot } from "../execution/SpawnTimerExecution";
 import { TargetPlayerExecutionSnapshot } from "../execution/TargetPlayerExecution";
@@ -41,6 +39,7 @@ import { TrainStationExecutionSnapshot } from "../execution/TrainStationExecutio
 import { TransportShipExecutionSnapshot } from "../execution/TransportShipExecution";
 import { TribeExecutionSnapshot } from "../execution/TribeExecution";
 import { UpgradeStructureExecutionSnapshot } from "../execution/UpgradeStructureExecution";
+import { WarshipCargoExecutionSnapshot } from "../execution/WarshipCargoExecution";
 import { WarshipExecutionSnapshot } from "../execution/WarshipExecution";
 import { WinCheckExecutionSnapshot } from "../execution/WinCheckExecution";
 import type { ExecutionSnapshotType } from "./ExecutionSnapshot";
@@ -56,6 +55,7 @@ export const EXECUTION_SNAPSHOT_TYPES = [
   AllianceExtensionExecutionSnapshot,
   AllianceRejectExecutionSnapshot,
   AllianceRequestExecutionSnapshot,
+  ArmyExecutionSnapshot,
   AttackExecutionSnapshot,
   BoatRetreatExecutionSnapshot,
   BreakAllianceExecutionSnapshot,
@@ -65,27 +65,23 @@ export const EXECUTION_SNAPSHOT_TYPES = [
   DeleteUnitExecutionSnapshot,
   DonateGoldExecutionSnapshot,
   DonateTroopsExecutionSnapshot,
-  DoomsdayClockExecutionSnapshot,
   EmbargoAllExecutionSnapshot,
   EmbargoExecutionSnapshot,
   EmojiExecutionSnapshot,
+  ExchangeExecutionSnapshot,
   FactoryExecutionSnapshot,
   MarkDisconnectedExecutionSnapshot,
-  MirvExecutionSnapshot,
-  MissileSiloExecutionSnapshot,
   MoveWarshipExecutionSnapshot,
   NationExecutionSnapshot,
   NoOpExecutionSnapshot,
-  NukeExecutionSnapshot,
+  OrderArmyExecutionSnapshot,
   PauseExecutionSnapshot,
   PlayerExecutionSnapshot,
   PortExecutionSnapshot,
   QuickChatExecutionSnapshot,
   RecomputeRailClusterExecutionSnapshot,
+  ResearchExecutionSnapshot,
   RetreatExecutionSnapshot,
-  SAMLauncherExecutionSnapshot,
-  SAMMissileExecutionSnapshot,
-  ShellExecutionSnapshot,
   SpawnExecutionSnapshot,
   SpawnTimerExecutionSnapshot,
   TargetPlayerExecutionSnapshot,
@@ -95,6 +91,7 @@ export const EXECUTION_SNAPSHOT_TYPES = [
   TransportShipExecutionSnapshot,
   TribeExecutionSnapshot,
   UpgradeStructureExecutionSnapshot,
+  WarshipCargoExecutionSnapshot,
   WarshipExecutionSnapshot,
   WinCheckExecutionSnapshot,
 ] as unknown as readonly ExecutionSnapshotType<unknown>[];

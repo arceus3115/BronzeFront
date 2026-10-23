@@ -3,7 +3,6 @@ import type { FrameEvents } from "./FrameEvents";
 import type {
   AttackRingInput,
   NameEntry,
-  NukeTelegraphData,
   PlayerState,
   PlayerStatusData,
   UnitState,
@@ -71,8 +70,6 @@ export interface FrameData {
    * triggers — when false.
    */
   readonly relationsDirty: boolean;
-  readonly allianceClusters: ReadonlyMap<number, number>;
-  readonly nukeTelegraphs: NukeTelegraphData[];
   readonly attackRings: AttackRingInput[];
   /** True when structures changed this tick (added/removed/level change). */
   readonly structuresDirty: boolean;

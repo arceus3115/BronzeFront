@@ -17,16 +17,11 @@ const DISABLED_UNIT_KEYS: Record<string, string> = {
   City: "unit_type.city",
   Port: "unit_type.port",
   "Defense Post": "unit_type.defense_post",
-  "SAM Launcher": "unit_type.sam_launcher",
-  "Missile Silo": "unit_type.missile_silo",
   Warship: "unit_type.warship",
-  Factory: "unit_type.factory",
-  "Atom Bomb": "unit_type.atom_bomb",
-  "Hydrogen Bomb": "unit_type.hydrogen_bomb",
-  MIRV: "unit_type.mirv",
+  Mine: "unit_type.mine",
+  Farm: "unit_type.farm",
   "Trade Ship": "player_stats_table.unit.trade",
   Transport: "player_stats_table.unit.trans",
-  "MIRV Warhead": "player_stats_table.unit.mirvw",
 };
 
 const millions = (gold: number) =>
@@ -116,18 +111,6 @@ export function notableLobbySettings(
     items.push({
       label: translateText("public_game_modifier.disable_alliances_label"),
       value: renderDuration(c.customAllianceDuration * 60),
-    });
-  if (c.waterNukes)
-    items.push({
-      label: translateText("game_settings.water_nukes"),
-      value: enabled,
-    });
-  if (c.doomsdayClock?.enabled)
-    items.push({
-      label: translateText("game_settings.doomsday_clock"),
-      value: translateText(
-        `doomsday_clock_speed.${c.doomsdayClock.speed ?? "normal"}`,
-      ),
     });
   if (c.overtime?.enabled)
     items.push({

@@ -354,11 +354,7 @@ describe("Map consistency", () => {
       "startingGold25M",
       "goldMultiplier",
       "isAlliancesDisabled",
-      "isNukesDisabled",
-      "isSAMsDisabled",
       "isPeaceTime",
-      "isWaterNukes",
-      "isDoomsdayClock",
     ]);
     const errors: string[] = [];
     for (const key of allMapKeys) {

@@ -39,6 +39,10 @@ export type Intent =
   | EmbargoIntent
   | QuickChatIntent
   | MoveWarshipIntent
+  | OrderArmyIntent
+  | ResearchIntent
+  | ExchangeIntent
+  | WarshipCargoIntent
   | MarkDisconnectedIntent
   | EmbargoAllIntent
   | UpgradeStructureIntent
@@ -67,6 +71,10 @@ export type UpgradeStructureIntent = z.infer<
   typeof UpgradeStructureIntentSchema
 >;
 export type MoveWarshipIntent = z.infer<typeof MoveWarshipIntentSchema>;
+export type OrderArmyIntent = z.infer<typeof OrderArmyIntentSchema>;
+export type ResearchIntent = z.infer<typeof ResearchIntentSchema>;
+export type ExchangeIntent = z.infer<typeof ExchangeIntentSchema>;
+export type WarshipCargoIntent = z.infer<typeof WarshipCargoIntentSchema>;
 export type QuickChatIntent = z.infer<typeof QuickChatIntentSchema>;
 export type MarkDisconnectedIntent = z.infer<
   typeof MarkDisconnectedIntentSchema
@@ -207,16 +215,6 @@ const TeamCountConfigSchema = zb.union(
 );
 export type TeamCountConfig = z.infer<typeof TeamCountConfigSchema>;
 
-// Doomsday Clock (anti-stall). Below a rising share of the map a player (or, in
-// team modes, their whole team) gets skulled and their troops drain to zero. The
-// required share rises in discrete waves per the `speed` preset (see
-// DoomsdayClock.ts). Only `enabled` and `speed` are wire-configurable; the
-// drain/warn tuning lives in DOOMSDAY_CLOCK_DEFAULTS (Config.ts).
-export const DoomsdayClockConfigSchema = z.object({
-  enabled: z.boolean().optional(),
-  speed: z.enum(["slow", "normal", "fast", "veryfast"]).optional(),
-});
-
 // Overtime (anti-stalemate). After startMinutes of game time the tile share
 // required to win drops steadily from the 80% base at a fixed rate (see
 // OVERTIME_DEFAULTS in Config.ts), so the leading side eventually crosses the
@@ -264,7 +262,6 @@ export const GameConfigSchema = z.object({
   gameMode: z.enum(GameMode),
   rankedType: z.enum(RankedType).optional(), // Only set for ranked games.
   gameMapSize: z.enum(GameMapSize),
-  doomsdayClock: DoomsdayClockConfigSchema.optional(),
   overtime: OvertimeConfigSchema.optional(),
   publicGameModifiers: z
     .object({
@@ -276,11 +273,7 @@ export const GameConfigSchema = z.object({
       goldMultiplier: zb.float({ min: 0.1, max: 1000 }).optional(),
       isAlliancesDisabled: z.boolean().optional(),
       isPortsDisabled: z.boolean().optional(),
-      isNukesDisabled: z.boolean().optional(),
-      isSAMsDisabled: z.boolean().optional(),
       isPeaceTime: z.boolean().optional(),
-      isWaterNukes: z.boolean().optional(),
-      isDoomsdayClock: z.boolean().optional(),
     })
     .optional(),
   nations: zb.union(
@@ -291,6 +284,8 @@ export const GameConfigSchema = z.object({
   ),
   bots: zb.uint({ max: 400 }),
   infiniteGold: z.boolean(),
+  infiniteFood: z.boolean().optional(),
+  infiniteScience: z.boolean().optional(),
   infiniteTroops: z.boolean(),
   instantBuild: z.boolean(),
   disableNavMesh: z.boolean().optional(),
@@ -307,7 +302,6 @@ export const GameConfigSchema = z.object({
   // Like nameReveals but keyed by stable account publicId (for automated hosts
   // that only know publicIds at create_game); resolved to clientID at lookup.
   nameRevealPublicIds: z.string().array().max(200).optional(),
-  waterNukes: z.boolean().nullable().optional(),
   randomSpawn: z.boolean(),
   maxPlayers: zb.uint().optional(),
   // OFM: allowlist of publicIds allowed to join (admin-only, see create_game).
@@ -324,13 +318,23 @@ export const GameConfigSchema = z.object({
   disabledUnits: z.enum(UnitType).array().optional(),
   playerTeams: TeamCountConfigSchema.optional(),
   goldMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
+  foodMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
+  scienceMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
   startingGold: zb.uint({ max: 1000000000 }).nullable().optional(),
+  startingFood: zb.uint({ max: 1000000000 }).nullable().optional(),
+  startingScience: zb.uint({ max: 1000000000 }).nullable().optional(),
   hostCheats: z
     .object({
       infiniteGold: z.boolean().optional(),
+      infiniteFood: z.boolean().optional(),
+      infiniteScience: z.boolean().optional(),
       infiniteTroops: z.boolean().optional(),
       goldMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
+      foodMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
+      scienceMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
       startingGold: zb.uint({ max: 1000000000 }).nullable().optional(),
+      startingFood: zb.uint({ max: 1000000000 }).nullable().optional(),
+      startingScience: zb.uint({ max: 1000000000 }).nullable().optional(),
     })
     .optional(),
   // Stripped from gameStartInfo and from the advertised lobby config: sibling
@@ -488,8 +492,6 @@ export const BuildUnitIntentSchema = z.object({
   type: z.literal("build_unit"),
   unit: z.enum(UnitType),
   tile: zb.uint(),
-  rocketDirectionUp: z.boolean().optional(),
-  amount: zb.uint({ min: 1, max: MAX_UPGRADE_AMOUNT }).optional(),
 });
 
 export const UpgradeStructureIntentSchema = z.object({
@@ -513,6 +515,32 @@ export const MoveWarshipIntentSchema = z.object({
   type: z.literal("move_warship"),
   unitIds: z.array(zb.int()).nonempty(),
   tile: zb.uint(),
+});
+
+export const OrderArmyIntentSchema = z.object({
+  type: z.literal("order_army"),
+  unitId: zb.uint(),
+  tile: zb.uint(),
+});
+
+export const ResearchIntentSchema = z.object({
+  type: z.literal("research"),
+  tech: z.enum(["bronze_weapons", "markets"]),
+});
+
+export const ExchangeIntentSchema = z.object({
+  type: z.literal("exchange"),
+  direction: z.enum(["food_to_money", "money_to_food"]),
+  /** Source resource spent. Only whole groups of three convert. */
+  amount: zb.uint(),
+});
+
+export const WarshipCargoIntentSchema = z.object({
+  type: z.literal("warship_cargo"),
+  unitId: zb.uint(),
+  action: z.enum(["load", "unload"]),
+  amount: zb.uint(),
+  tile: zb.uint().nullable(),
 });
 
 export const DeleteUnitIntentSchema = z.object({
@@ -580,6 +608,10 @@ export const IntentSchema = z.discriminatedUnion("type", [
   EmbargoIntentSchema,
   EmbargoAllIntentSchema,
   MoveWarshipIntentSchema,
+  OrderArmyIntentSchema,
+  ResearchIntentSchema,
+  ExchangeIntentSchema,
+  WarshipCargoIntentSchema,
   QuickChatIntentSchema,
   AllianceExtensionIntentSchema,
   DeleteUnitIntentSchema,

@@ -25,18 +25,12 @@ function ctx(overrides: Partial<TutorialContext> = {}): TutorialContext {
     ports: 0,
     defensePostDisabled: false,
     defensePosts: 0,
-    factoryDisabled: false,
-    factories: 0,
+    farmDisabled: false,
+    farms: 0,
+    mineDisabled: false,
+    mines: 0,
     warshipDisabled: false,
     warships: 0,
-    siloDisabled: false,
-    silos: 0,
-    atomDisabled: false,
-    siloReady: false,
-    atomLaunched: false,
-    hydrogenDisabled: false,
-    mirvDisabled: false,
-    samDisabled: false,
     ...overrides,
   };
 }
@@ -148,15 +142,11 @@ describe("TutorialProgress", () => {
       cityDisabled: true,
       portDisabled: true,
       defensePostDisabled: true,
-      factoryDisabled: true,
+      farmDisabled: true,
+      mineDisabled: true,
       warshipDisabled: true,
-      siloDisabled: true,
-      atomDisabled: true,
-      hydrogenDisabled: true,
-      mirvDisabled: true,
-      samDisabled: true,
     });
-    expect(p.total(c)).toBe(TUTORIAL_STEPS.length - 17);
+    expect(p.total(c)).toBe(TUTORIAL_STEPS.length - 13);
 
     settle(p, c);
     settle(p, c);
@@ -187,12 +177,12 @@ describe("TutorialProgress", () => {
     expect(p.current()?.id).toBe("alliance_info");
     p.acknowledge();
     settle(p, ctx({ allied: true }));
-    expect(p.current()?.id).toBe("buy_factory");
+    expect(p.current()?.id).toBe("buy_farm");
 
     // Without nations (or with alliances off) both steps are skipped.
     const q = new TutorialProgress(TUTORIAL_STEPS.slice(first));
     q.update(ctx({ nationsExist: false }));
-    expect(q.current()?.id).toBe("buy_factory");
+    expect(q.current()?.id).toBe("buy_farm");
   });
 
   it("gates the tribes step on affordable gold, then the city step on the city existing", () => {
@@ -218,59 +208,43 @@ describe("TutorialProgress", () => {
     expect(p.stepDone()).toBe(true);
   });
 
-  it("runs city, factory, port, warship, silo, pausing on each info step", () => {
-    const first = TUTORIAL_STEPS.findIndex((s) => s.id === "buy_factory");
+  it("runs farm, mine, port, and warship, pausing on each info step", () => {
+    const first = TUTORIAL_STEPS.findIndex((s) => s.id === "buy_farm");
     const p = new TutorialProgress(TUTORIAL_STEPS.slice(first));
     p.update(ctx());
-    expect(p.current()?.id).toBe("buy_factory");
+    expect(p.current()?.id).toBe("buy_farm");
 
-    settle(p, ctx({ factories: 1 }));
-    expect(p.current()?.id).toBe("factory_info");
-    for (let i = 0; i < 50; i++) p.update(ctx({ factories: 1 }));
-    expect(p.current()?.id).toBe("factory_info");
+    settle(p, ctx({ farms: 1 }));
+    expect(p.current()?.id).toBe("farm_info");
+    for (let i = 0; i < 50; i++) p.update(ctx({ farms: 1 }));
+    expect(p.current()?.id).toBe("farm_info");
     p.acknowledge();
-    settle(p, ctx({ factories: 1 }));
+    settle(p, ctx({ farms: 1 }));
+
+    expect(p.current()?.id).toBe("buy_mine");
+    settle(p, ctx({ farms: 1, mines: 1 }));
+    expect(p.current()?.id).toBe("mine_info");
+    p.acknowledge();
+    settle(p, ctx({ farms: 1, mines: 1 }));
 
     expect(p.current()?.id).toBe("send_boat");
-    settle(p, ctx({ factories: 1, boatSent: true }));
+    settle(p, ctx({ farms: 1, mines: 1, boatSent: true }));
 
     expect(p.current()?.id).toBe("buy_port");
     expect(p.current()?.highlight).toBe("port");
-    settle(p, ctx({ factories: 1, ports: 1 }));
+    settle(p, ctx({ farms: 1, mines: 1, ports: 1 }));
     expect(p.current()?.id).toBe("port_info");
     expect(p.current()?.bullets).toHaveLength(2);
     p.acknowledge();
-    settle(p, ctx({ factories: 1, ports: 1 }));
+    settle(p, ctx({ farms: 1, mines: 1, ports: 1 }));
 
     expect(p.current()?.id).toBe("buy_defense_post");
     expect(p.current()?.highlight).toBe("defense_post");
-    settle(p, ctx({ factories: 1, ports: 1, defensePosts: 1 }));
+    settle(p, ctx({ farms: 1, mines: 1, ports: 1, defensePosts: 1 }));
 
     expect(p.current()?.id).toBe("buy_warship");
     expect(p.current()?.highlight).toBe("warship");
-    settle(p, ctx({ factories: 1, ports: 1, warships: 1 }));
-
-    expect(p.current()?.id).toBe("buy_silo");
-    expect(p.current()?.highlight).toBe("silo");
-    p.update(ctx({ factories: 1, ports: 1, warships: 1 }));
-    expect(p.stepDone()).toBe(false);
-    settle(p, ctx({ factories: 1, ports: 1, warships: 1, silos: 1 }));
-
-    expect(p.current()?.id).toBe("launch_atom");
-    expect(p.current()?.highlight).toBe("atom");
-    settle(p, ctx({ silos: 1, atomLaunched: true }));
-
-    for (const [id, highlight] of [
-      ["atom_info", "atom"],
-      ["hydrogen_info", "hydrogen"],
-      ["mirv_info", "mirv"],
-      ["sam_info", "sam"],
-    ]) {
-      expect(p.current()?.id).toBe(id);
-      expect(p.current()?.highlight).toBe(highlight);
-      p.acknowledge();
-      settle(p, ctx({ silos: 1 }));
-    }
+    settle(p, ctx({ farms: 1, mines: 1, ports: 1, warships: 1 }));
     expect(p.finished()).toBe(true);
   });
 });

@@ -1,3 +1,4 @@
+import { UnitType } from "@openfront/engine-api/game/GameTypes";
 import { zInt, zPlayerRef } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
@@ -23,6 +24,14 @@ export class RetreatExecution implements Execution {
   init(mg: Game, ticks: number): void {
     this.mg = mg;
     this.startTick = mg.ticks();
+    const id = Number(this.attackID);
+    if (!Number.isInteger(id)) return;
+    const army = this.player
+      .units(UnitType.Army)
+      .find((unit) => unit.id() === id);
+    if (army === undefined) return;
+    army.delete(false);
+    this.active = false;
   }
 
   tick(ticks: number): void {

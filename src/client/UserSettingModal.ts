@@ -529,11 +529,6 @@ export class UserSettingModal extends BaseModal {
     this.requestUpdate();
   }
 
-  private sliderNukeAllianceSafetyDuration(e: CustomEvent<{ value: number }>) {
-    this.userSettings.setNukeAllianceSafetyDuration(e.detail.value);
-    this.requestUpdate();
-  }
-
   private toggleGoToPlayer() {
     this.userSettings.toggleGoToPlayer();
 
@@ -1312,12 +1307,22 @@ export class UserSettingModal extends BaseModal {
       ></setting-keybind>
 
       <setting-keybind
-        action="buildFactory"
-        label=${translateText("user_setting.build_factory")}
-        description=${translateText("user_setting.build_factory_desc")}
-        defaultKey=${this.defaultKeybinds.buildFactory}
-        .value=${this.getKeyValue("buildFactory")}
-        .display=${this.getKeyChar("buildFactory")}
+        action="buildFarm"
+        label=${translateText("user_setting.build_farm")}
+        description=${translateText("user_setting.build_farm_desc")}
+        defaultKey=${this.defaultKeybinds.buildFarm}
+        .value=${this.getKeyValue("buildFarm")}
+        .display=${this.getKeyChar("buildFarm")}
+        @change=${this.handleKeybindChange}
+      ></setting-keybind>
+
+      <setting-keybind
+        action="buildMine"
+        label=${translateText("user_setting.build_mine")}
+        description=${translateText("user_setting.build_mine_desc")}
+        defaultKey=${this.defaultKeybinds.buildMine}
+        .value=${this.getKeyValue("buildMine")}
+        .display=${this.getKeyChar("buildMine")}
         @change=${this.handleKeybindChange}
       ></setting-keybind>
 
@@ -1342,62 +1347,12 @@ export class UserSettingModal extends BaseModal {
       ></setting-keybind>
 
       <setting-keybind
-        action="buildMissileSilo"
-        label=${translateText("user_setting.build_missile_silo")}
-        description=${translateText("user_setting.build_missile_silo_desc")}
-        defaultKey=${this.defaultKeybinds.buildMissileSilo}
-        .value=${this.getKeyValue("buildMissileSilo")}
-        .display=${this.getKeyChar("buildMissileSilo")}
-        @change=${this.handleKeybindChange}
-      ></setting-keybind>
-
-      <setting-keybind
-        action="buildSamLauncher"
-        label=${translateText("user_setting.build_sam_launcher")}
-        description=${translateText("user_setting.build_sam_launcher_desc")}
-        defaultKey=${this.defaultKeybinds.buildSamLauncher}
-        .value=${this.getKeyValue("buildSamLauncher")}
-        .display=${this.getKeyChar("buildSamLauncher")}
-        @change=${this.handleKeybindChange}
-      ></setting-keybind>
-
-      <setting-keybind
         action="buildWarship"
         label=${translateText("user_setting.build_warship")}
         description=${translateText("user_setting.build_warship_desc")}
         defaultKey=${this.defaultKeybinds.buildWarship}
         .value=${this.getKeyValue("buildWarship")}
         .display=${this.getKeyChar("buildWarship")}
-        @change=${this.handleKeybindChange}
-      ></setting-keybind>
-
-      <setting-keybind
-        action="buildAtomBomb"
-        label=${translateText("user_setting.build_atom_bomb")}
-        description=${translateText("user_setting.build_atom_bomb_desc")}
-        defaultKey=${this.defaultKeybinds.buildAtomBomb}
-        .value=${this.getKeyValue("buildAtomBomb")}
-        .display=${this.getKeyChar("buildAtomBomb")}
-        @change=${this.handleKeybindChange}
-      ></setting-keybind>
-
-      <setting-keybind
-        action="buildHydrogenBomb"
-        label=${translateText("user_setting.build_hydrogen_bomb")}
-        description=${translateText("user_setting.build_hydrogen_bomb_desc")}
-        defaultKey=${this.defaultKeybinds.buildHydrogenBomb}
-        .value=${this.getKeyValue("buildHydrogenBomb")}
-        .display=${this.getKeyChar("buildHydrogenBomb")}
-        @change=${this.handleKeybindChange}
-      ></setting-keybind>
-
-      <setting-keybind
-        action="buildMIRV"
-        label=${translateText("user_setting.build_mirv")}
-        description=${translateText("user_setting.build_mirv_desc")}
-        defaultKey=${this.defaultKeybinds.buildMIRV}
-        .value=${this.getKeyValue("buildMIRV")}
-        .display=${this.getKeyChar("buildMIRV")}
         @change=${this.handleKeybindChange}
       ></setting-keybind>
 
@@ -2007,22 +1962,6 @@ export class UserSettingModal extends BaseModal {
         .value=${String(this.userSettings.attackRatioIncrement())}
         @change=${this.changeAttackRatioIncrement}
       ></setting-select>
-
-      <setting-slider
-        label="${translateText("user_setting.nuke_alliance_safety_label")}"
-        description="${translateText("user_setting.nuke_alliance_safety_desc")}"
-        min="0"
-        max="30"
-        .value=${this.userSettings.nukeAllianceSafetyDuration()}
-        .formatValue=${(val: number) =>
-          val > 0
-            ? translateText("user_setting.nuke_alliance_safety_duration", {
-                count: val,
-                seconds: (val / 10).toFixed(1),
-              })
-            : translateText("user_setting.off")}
-        @change=${this.sliderNukeAllianceSafetyDuration}
-      ></setting-slider>
 
       ${this.showEasterEggSettings
         ? html`

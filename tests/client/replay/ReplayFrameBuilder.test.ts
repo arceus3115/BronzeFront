@@ -19,7 +19,6 @@ import {
 } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { ConstructionExecution } from "@openfront/engine/execution/ConstructionExecution";
-import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { TransportShipExecution } from "@openfront/engine/execution/TransportShipExecution";
 import { Execution, Game } from "@openfront/engine/game/Game";
@@ -110,8 +109,6 @@ function comparable(fd: FrameData) {
     conquestEvents: fd.events.conquestEvents,
     bonusEvents: fd.events.bonusEvents,
     playerStatus: [...fd.playerStatus],
-    allianceClusters: [...fd.allianceClusters],
-    nukeTelegraphs: fd.nukeTelegraphs,
     attackRings: fd.attackRings,
     trailDirtyRowMin: fd.trailDirtyRowMin,
     trailDirtyRowMax: fd.trailDirtyRowMax,
@@ -163,9 +160,7 @@ async function expectParity(rec: RecordedGame, mapName: string) {
     trailTiles: 0,
     railTiles: 0,
     deadUnits: 0,
-    telegraphs: 0,
     terrainChanges: 0,
-    nukedTiles: 0,
   };
 
   for (let i = 0; i < rec.frames.length; i++) {
@@ -201,23 +196,10 @@ async function expectParity(rec: RecordedGame, mapName: string) {
     );
     expectBuffersEqual(liveTerrain(), terrain.bytes, `${at} terrain`);
     seen.terrainChanges += changed.length;
-    // Nuke damage on map layers is outside FrameData too: the replay's
-    // impact events carry what live marks (WebGLFrameBuilder.syncNukeImpacts).
-    const nuked = live.recentlyNukedTiles();
-    const impact = reader.header.nukeImpacts.find((e) => e.tick === a.tick);
-    expect(
-      { land: impact?.land ?? [], water: impact?.water ?? [] },
-      `${at} nuke impacts`,
-    ).toEqual({
-      land: nuked.filter((t) => live.isLand(t)),
-      water: nuked.filter((t) => !live.isLand(t)),
-    });
-    seen.nukedTiles += nuked.length;
 
     seen.trailTiles += a.trailState.some((v) => v !== 0) ? 1 : 0;
     seen.railTiles += a.railroadState.some((v) => v !== 0) ? 1 : 0;
     seen.deadUnits += a.events.deadUnits.length;
-    seen.telegraphs += a.nukeTelegraphs.length;
   }
   return { seen, reader, builder, baseTerrain };
 }
@@ -234,8 +216,6 @@ function seekComparable(fd: FrameData, terrain: Uint8Array) {
       names: c.names,
       conquestEvents: c.conquestEvents,
       playerStatus: c.playerStatus,
-      allianceClusters: c.allianceClusters,
-      nukeTelegraphs: c.nukeTelegraphs,
       attackRings: c.attackRings,
     },
     tiles: fd.tileState.slice(),
@@ -325,65 +305,6 @@ describe("ReplayFrameBuilder parity with GameView", () => {
     await expectParity(rec, "big_plains");
   }, 60_000);
 
-  test("nuke, transport ship, construction and war", async () => {
-    const game = await setup(
-      "big_plains",
-      { infiniteGold: true, instantBuild: true },
-      [],
-      undefined,
-      undefined,
-      false,
-    );
-    spawnHuman(game, "alice", 20, 20);
-    spawnHuman(game, "bob", 150, 150);
-    const rec = await recordGame(game, {
-      ticks: 220,
-      skipInit: true,
-      cloneFrames: true,
-      keyframeInterval: 50,
-      beforeTick: (g, t) => {
-        const alice = () => g.player("alice");
-        const bob = () => g.player("bob");
-        if (t === 3) g.endSpawnPhase();
-        if (t === 5) {
-          g.addExecution(
-            new AttackExecution(null, alice(), g.terraNullius().id()),
-          );
-          g.addExecution(
-            new AttackExecution(null, bob(), g.terraNullius().id()),
-          );
-        }
-        if (t === 60) {
-          g.addExecution(
-            new ConstructionExecution(
-              alice(),
-              UnitType.MissileSilo,
-              g.ref(20, 20),
-            ),
-          );
-        }
-        if (t === 64) {
-          g.addExecution(
-            new NukeExecution(
-              UnitType.AtomBomb,
-              alice(),
-              g.ref(150, 150),
-              null,
-            ),
-          );
-        }
-        if (t === 120) {
-          g.addExecution(new AttackExecution(null, alice(), bob().id()));
-        }
-      },
-    });
-    const { seen, baseTerrain } = await expectParity(rec, "big_plains");
-    expectSeekParity(rec, baseTerrain, [150, 70, 115, 116, 0, 219, 49, 50]);
-    // The scenario exercised what it is for.
-    expect(seen.trailTiles).toBeGreaterThan(0); // the nuke's trail
-    expect(seen.deadUnits).toBeGreaterThan(0);
-    expect(seen.telegraphs).toBeGreaterThan(0);
-  }, 60_000);
 
   test("transport ship trail", async () => {
     const game = await setup(
@@ -414,52 +335,6 @@ describe("ReplayFrameBuilder parity with GameView", () => {
     expect(seen.trailTiles).toBeGreaterThan(0);
   }, 60_000);
 
-  test("water nukes reshape the terrain", async () => {
-    const game = await setup(
-      "big_plains",
-      { infiniteGold: true, instantBuild: true, waterNukes: true },
-      [],
-      undefined,
-      undefined,
-      false,
-    );
-    spawnHuman(game, "alice", 20, 20);
-    const rec = await recordGame(game, {
-      ticks: 200,
-      skipInit: true,
-      cloneFrames: true,
-      keyframeInterval: 40,
-      beforeTick: (g, t) => {
-        const alice = () => g.player("alice");
-        if (t === 3) g.endSpawnPhase();
-        if (t === 5) g.addExecution(conquerDisc("alice", 20, 20, 12));
-        if (t === 10) {
-          g.addExecution(
-            new ConstructionExecution(
-              alice(),
-              UnitType.MissileSilo,
-              g.ref(20, 20),
-            ),
-          );
-        }
-        // Unowned land far away: the crater turns into water.
-        if (t === 14) {
-          g.addExecution(
-            new NukeExecution(
-              UnitType.AtomBomb,
-              alice(),
-              g.ref(150, 150),
-              null,
-            ),
-          );
-        }
-      },
-    });
-    const { seen, baseTerrain } = await expectParity(rec, "big_plains");
-    expect(seen.terrainChanges).toBeGreaterThan(0);
-    expect(seen.nukedTiles).toBeGreaterThan(0);
-    expectSeekParity(rec, baseTerrain, [199, 60, 0, 120, 79, 80, 159]);
-  }, 60_000);
 
   test("railroads", async () => {
     const game = await setup(
@@ -483,7 +358,7 @@ describe("ReplayFrameBuilder parity with GameView", () => {
         // Stations 20 tiles apart (trainStationMinRange is 15).
         if (t === 10) {
           for (const [type, x, y] of [
-            [UnitType.Factory, 50, 50],
+            [UnitType.Mine, 50, 50],
             [UnitType.City, 70, 50],
             [UnitType.City, 50, 70],
             [UnitType.City, 30, 50],
@@ -522,61 +397,3 @@ describe("ReplayFrameBuilder parity with GameView", () => {
   }, 60_000);
 });
 
-describe("ReplayFrameBuilder nuke telegraphs", () => {
-  // The scenarios above never deliver a plan ahead of its start, so check
-  // the gating on a hand-built replay: GameView hides a nuke's telegraph
-  // while its (delivered) plan hasn't started.
-  const header = {
-    mapWidth: 10,
-    mapHeight: 10,
-    players: [],
-    railroadEvents: [],
-    deadUnitEvents: [],
-    spawnPhaseEnd: { tick: 1, startTick: 1 },
-    motionPlans: [
-      {
-        kind: "grid",
-        tick: 5,
-        unitId: 7,
-        planId: 1,
-        startTick: 8,
-        ticksPerStep: 1,
-        path: new Uint32Array([0, 1]),
-      },
-    ],
-  } as unknown as ReplayHeader;
-  const nuke = {
-    id: 7,
-    unitType: UnitType.AtomBomb,
-    ownerID: 1,
-    targetTile: 55,
-    isActive: true,
-    waitTicks: 0,
-    pos: 0,
-    lastPos: 0,
-  } as unknown as UnitState;
-  const frame = (tick: number) =>
-    ({
-      frame: tick,
-      tick,
-      tileState: new Uint16Array(100),
-      changedTiles: [],
-      falloutTiles: 0,
-      players: new Map(),
-      units: new Map([[7, nuke]]),
-      names: new Map(),
-      terrain: new Map(),
-      changedTerrain: null,
-      miscUpdates: null,
-    }) satisfies ReplayFrame;
-
-  test.each([
-    [4, 1], // plan not delivered yet: shown, as live
-    [5, 0], // delivered, starts at 8: hidden
-    [7, 0],
-    [8, 1], // started
-  ])("tick %i: %i telegraph(s)", (tick, count) => {
-    const builder = new ReplayFrameBuilder(header, RULES);
-    expect(builder.seek(frame(tick)).nukeTelegraphs).toHaveLength(count);
-  });
-});

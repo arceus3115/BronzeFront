@@ -1,7 +1,4 @@
-import type {
-  NukeImpactEvent,
-  ReplayFrame,
-} from "../../../src/client/replay/codec/ReplayTypes";
+import type { ReplayFrame } from "../../../src/client/replay/codec/ReplayTypes";
 import {
   CameraGestures,
   ReplayCamera,
@@ -10,7 +7,6 @@ import {
   formatGameTime,
   timelineFrames,
 } from "../../../src/client/replay/ReplayControls";
-import { ReplayNukedLayers } from "../../../src/client/replay/ReplayNukedLayers";
 import { ReplayTerrain } from "../../../src/client/replay/ReplayTerrain";
 import { parseReplayViewerHash } from "../../../src/client/replay/ReplayViewerRoute";
 
@@ -147,83 +143,6 @@ describe("ReplayTerrain", () => {
   });
 });
 
-describe("ReplayNukedLayers", () => {
-  const layers = [
-    { id: "forest", placement: "land", nukeable: true },
-    { id: "reef", placement: "water", nukeable: true },
-    { id: "label", placement: "water" },
-  ] as ConstructorParameters<typeof ReplayNukedLayers>[0];
-
-  /** The sink keeps each layer's mask like MapRenderer does. */
-  function setup(impacts: NukeImpactEvent[]) {
-    const marked: [string, number[]][] = [];
-    const masks = new Map<string, number[]>();
-    const rebuilds = { count: 0 };
-    const nuked = new ReplayNukedLayers(layers, 8, impacts, {
-      markLayerTilesDestroyed: (id, tiles) => {
-        marked.push([id, tiles]);
-        if (!masks.has(id)) masks.set(id, new Array<number>(8).fill(0));
-        for (const t of tiles) masks.get(id)![t] = 1;
-      },
-      setLayerDestroyedMask: (id, mask) => {
-        rebuilds.count++;
-        masks.set(id, [...mask]);
-      },
-    });
-    return { nuked, marked, masks, rebuilds };
-  }
-
-  test("playing on marks each tick's impacts on the layer they hit", () => {
-    const { nuked, marked } = setup([
-      { tick: 5, land: [1, 2], water: [6] },
-      { tick: 9, land: [3], water: [] },
-    ]);
-    nuked.advance(4);
-    expect(marked).toEqual([]);
-    nuked.advance(5);
-    expect(marked).toEqual([
-      ["forest", [1, 2]],
-      ["reef", [6]],
-    ]);
-    nuked.advance(9);
-    expect(marked[marked.length - 1]).toEqual(["forest", [3]]);
-    expect(marked).toHaveLength(3);
-  });
-
-  test("seeking back rebuilds the masks, so the damage is undone", () => {
-    const impacts: NukeImpactEvent[] = [{ tick: 5, land: [1, 2], water: [6] }];
-    const { nuked, masks } = setup(impacts);
-    nuked.seek(7);
-    expect(masks.get("forest")).toEqual([0, 1, 1, 0, 0, 0, 0, 0]);
-    expect(masks.get("reef")).toEqual([0, 0, 0, 0, 0, 0, 1, 0]);
-    expect(masks.has("label")).toBe(false);
-    nuked.seek(4);
-    expect(masks.get("forest")).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
-    // Impacts appended later (a game still being processed) count too.
-    impacts.push({ tick: 8, land: [0], water: [] });
-    nuked.seek(8);
-    expect(masks.get("forest")).toEqual([1, 1, 1, 0, 0, 0, 0, 0]);
-  });
-
-  test("seeking forward only marks the impacts it passes", () => {
-    const { nuked, masks, rebuilds } = setup([
-      { tick: 5, land: [1, 2], water: [6] },
-      { tick: 9, land: [3], water: [] },
-    ]);
-    nuked.seek(0); // the first seek sets the masks
-    expect(rebuilds.count).toBe(2);
-    nuked.seek(4); // passes no impact: nothing to do
-    nuked.seek(7);
-    nuked.advance(8);
-    nuked.seek(12);
-    expect(rebuilds.count).toBe(2);
-    expect(masks.get("forest")).toEqual([0, 1, 1, 1, 0, 0, 0, 0]);
-    expect(masks.get("reef")).toEqual([0, 0, 0, 0, 0, 0, 1, 0]);
-    nuked.seek(6); // back past the tick 9 impact
-    expect(rebuilds.count).toBe(4);
-    expect(masks.get("forest")).toEqual([0, 1, 1, 0, 0, 0, 0, 0]);
-  });
-});
 
 describe("the timeline of a game still being processed", () => {
   test("spans the whole game while it grows", () => {

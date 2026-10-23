@@ -22,6 +22,10 @@ function makePlayerState(overrides: Partial<PlayerState> = {}): PlayerState {
     deathPosition: null,
     tilesOwned: 0,
     gold: 0,
+    food: 0,
+    science: 0,
+    bronzeWeapons: false,
+    markets: false,
     tradeGold: 0,
     trainGold: 0,
     piracyGold: 0,
@@ -29,9 +33,6 @@ function makePlayerState(overrides: Partial<PlayerState> = {}): PlayerState {
     troops: 100,
     isTraitor: false,
     traitorRemainingTicks: 0,
-    inDoomsdayClock: false,
-    isDecaying: false,
-    markedDoomsdayClockTick: -1,
     betrayals: 0,
     hasSpawned: true,
     lastDeleteUnitTick: 0,
@@ -555,15 +556,4 @@ describe("diffPlayerUpdate — every scalar field must be wired up", () => {
     });
   }
 
-  it("merges isDecaying through to the client state", () => {
-    const state = makePlayerState({ isDecaying: false });
-    applyStateUpdate(state, { ...base, isDecaying: true } as PlayerUpdate);
-    expect(state.isDecaying).toBe(true);
-    // ...and a later update that omits it must not clobber it.
-    applyStateUpdate(state, {
-      type: GameUpdateType.Player,
-      id: "p1",
-    } as PlayerUpdate);
-    expect(state.isDecaying).toBe(true);
-  });
 });

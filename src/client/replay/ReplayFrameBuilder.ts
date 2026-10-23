@@ -22,8 +22,6 @@ import {
   GameUpdateType,
   type GameUpdateViewData,
 } from "@openfront/engine-api/game/GameUpdates";
-import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
-import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
 import { computePlayerStatus } from "../render/frame/derive/PlayerStatus";
 import { buildRelationMatrix } from "../render/frame/derive/RelationMatrix";
 import { RailroadCache } from "../render/frame/RailroadCache";
@@ -51,7 +49,6 @@ import { RailroadEventKind } from "./codec/ReplayTypes";
 /** Game rules the derived data needs (from the game's Config). */
 export interface ReplayRules {
   allianceDuration: number;
-  doomsdayClockWarnTicks: number;
 }
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
@@ -71,11 +68,6 @@ export class ReplayFrameBuilder {
   /** The ticks in railroadUpdates, ascending. */
   private readonly railroadTicks: number[] = [];
   private readonly deadUnits = new Map<number, DeadUnitFx[]>();
-  /** Grid plans per unit, in the order they arrived. */
-  private readonly gridPlans = new Map<
-    number,
-    { tick: number; startTick: number }[]
-  >();
   private readonly teams = new Map<number, string>();
   private readonly smallIDs = new Map<string, number>();
   private readonly playerIDs = new Map<number, string>();
@@ -121,8 +113,6 @@ export class ReplayFrameBuilder {
       relationMatrix: new Uint8Array(0),
       relationSize: 0,
       relationsDirty: false,
-      allianceClusters: new Map(),
-      nukeTelegraphs: [],
       attackRings: [],
       structuresDirty: false,
     };
@@ -148,11 +138,6 @@ export class ReplayFrameBuilder {
         reachedTarget: d.reachedTarget,
         ownerSmallID: d.ownerSmallID,
       });
-    }
-    for (const p of events.motionPlans) {
-      let list = this.gridPlans.get(p.unitId);
-      if (list === undefined) this.gridPlans.set(p.unitId, (list = []));
-      list.push({ tick: p.tick, startTick: p.startTick });
     }
     for (const p of players) {
       this.smallIDs.set(p.id, p.smallID);
@@ -215,31 +200,19 @@ export class ReplayFrameBuilder {
       ev.bonusEvents.push(...this.bonusEvents(f));
     }
 
-    fd.playerStatus = computePlayerStatus(f.players, f.units, {
+    fd.playerStatus = computePlayerStatus(f.players, {
       localPlayerSmallID: 0,
       localPlayerID: "",
-      tileState: f.tileState,
       tick: f.tick,
       allianceDuration: this.rules.allianceDuration,
       isTransitiveTarget: () => false,
-      doomsdayClockWarnTicks: this.rules.doomsdayClockWarnTicks,
     });
     fd.relationsDirty = this.relationsChanged(f.players);
     if (fd.relationsDirty) {
       const rel = buildRelationMatrix(f.players, this.teams);
       fd.relationMatrix = rel.matrix;
       fd.relationSize = rel.size;
-      fd.allianceClusters = computeAllianceClusters(f.players);
     }
-    fd.nukeTelegraphs = extractNukeTelegraphs(
-      f.units,
-      this.header.mapWidth,
-      0,
-      fd.relationMatrix,
-      fd.relationSize,
-      this.deliveredPlans(f),
-      f.tick,
-    );
     fd.attackRings = []; // local player only
     fd.structuresDirty = this.structuresChanged(f.units);
   }
@@ -445,23 +418,6 @@ export class ReplayFrameBuilder {
     return changed;
   }
 
-  /** Each unit's latest grid plan that has arrived by this frame. */
-  private deliveredPlans(
-    f: ReplayFrame,
-  ): ReadonlyMap<number, { startTick: number }> {
-    const out = new Map<number, { startTick: number }>();
-    for (const id of f.units.keys()) {
-      const plans = this.gridPlans.get(id);
-      if (plans === undefined) continue;
-      let latest: { startTick: number } | undefined;
-      for (const p of plans) {
-        if (p.tick > f.tick) break;
-        latest = p;
-      }
-      if (latest !== undefined) out.set(id, latest);
-    }
-    return out;
-  }
 }
 
 /** The players without emojis, copying only the ones that had any. */

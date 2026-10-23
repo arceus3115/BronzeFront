@@ -35,8 +35,6 @@ import type {
 import { NationAllianceBehavior } from "./nation/NationAllianceBehavior";
 import { NationAttackBehavior } from "./nation/NationAttackBehavior";
 import { NationEmojiBehavior } from "./nation/NationEmojiBehavior";
-import { NationMIRVBehavior } from "./nation/NationMIRVBehavior";
-import { NationNukeBehavior } from "./nation/NationNukeBehavior";
 import { NationStructureBehavior } from "./nation/NationStructureBehavior";
 import { NationWarshipBehavior } from "./nation/NationWarshipBehavior";
 import { SpawnExecution } from "./SpawnExecution";
@@ -47,11 +45,9 @@ export class NationExecution implements Execution {
   private behaviorsInitialized = false;
   private spawnExecAdded = false;
   private emojiBehavior!: NationEmojiBehavior;
-  private mirvBehavior!: NationMIRVBehavior;
   private attackBehavior!: NationAttackBehavior;
   private allianceBehavior!: NationAllianceBehavior;
   private warshipBehavior!: NationWarshipBehavior;
-  private nukeBehavior!: NationNukeBehavior;
   private structureBehavior!: NationStructureBehavior;
   private mg: Game;
   private player: Player | null = null;
@@ -196,7 +192,6 @@ export class NationExecution implements Execution {
     }
 
     this.attackBehavior.followUpLandings();
-    this.nukeBehavior.followUpStrikes();
 
     if (ticks % this.attackRate !== this.attackTick) {
       // Call handleStructures twice between regular attack ticks (at 1/3 and 2/3 of the interval)
@@ -220,13 +215,11 @@ export class NationExecution implements Execution {
     this.updateRelationsFromEmbargos();
     this.allianceBehavior.handleAllianceRequests();
     this.allianceBehavior.handleAllianceExtensionRequests();
-    this.mirvBehavior.considerMIRV();
     this.structureBehavior.handleStructures();
     this.warshipBehavior.maybeSpawnWarship();
     this.handleEmbargoesToHostileNations();
     this.attackBehavior.maybeAttack();
     this.warshipBehavior.counterWarshipInfestation();
-    this.nukeBehavior.maybeSendNuke();
   }
 
   private initializeBehaviors(): void {
@@ -236,12 +229,6 @@ export class NationExecution implements Execution {
       this.random,
       this.mg,
       this.player,
-    );
-    this.mirvBehavior = new NationMIRVBehavior(
-      this.random,
-      this.mg,
-      this.player,
-      this.emojiBehavior,
     );
     this.allianceBehavior = new NationAllianceBehavior(
       this.random,
@@ -265,13 +252,6 @@ export class NationExecution implements Execution {
       this.allianceBehavior,
       this.emojiBehavior,
       this.warshipBehavior,
-    );
-    this.nukeBehavior = new NationNukeBehavior(
-      this.random,
-      this.mg,
-      this.player,
-      this.attackBehavior,
-      this.emojiBehavior,
     );
     this.structureBehavior = new NationStructureBehavior(
       this.random,
@@ -413,11 +393,9 @@ export class NationExecution implements Execution {
       behaviors: this.behaviorsInitialized
         ? {
             emoji: this.emojiBehavior.snapshot(w),
-            mirv: this.mirvBehavior.snapshot(w),
             alliance: this.allianceBehavior.snapshot(w),
             warship: this.warshipBehavior.snapshot(w),
             attack: this.attackBehavior.snapshot(w),
-            nuke: this.nukeBehavior.snapshot(w),
             structure: this.structureBehavior.snapshot(w),
           }
         : null,
@@ -455,14 +433,11 @@ export class NationExecution implements Execution {
     const shell = <T extends object>(cls: { prototype: T }): T =>
       Object.create(cls.prototype) as T;
     const emoji = shell(NationEmojiBehavior);
-    const mirv = shell(NationMIRVBehavior);
     const alliance = shell(NationAllianceBehavior);
     const warship = shell(NationWarshipBehavior);
     const attack = shell(NationAttackBehavior);
-    const nuke = shell(NationNukeBehavior);
     const structure = shell(NationStructureBehavior);
     emoji.restoreSnapshot(b.emoji, r, random, player);
-    mirv.restoreSnapshot(b.mirv, r, random, player, emoji);
     alliance.restoreSnapshot(b.alliance, r, random, player, emoji);
     warship.restoreSnapshot(b.warship, r, random, player, emoji);
     attack.restoreSnapshot(
@@ -474,14 +449,11 @@ export class NationExecution implements Execution {
       emoji,
       warship,
     );
-    nuke.restoreSnapshot(b.nuke, r, random, player, attack, emoji);
     structure.restoreSnapshot(b.structure, r, random, player);
     this.emojiBehavior = emoji;
-    this.mirvBehavior = mirv;
     this.allianceBehavior = alliance;
     this.warshipBehavior = warship;
     this.attackBehavior = attack;
-    this.nukeBehavior = nuke;
     this.structureBehavior = structure;
   }
 }
@@ -506,11 +478,9 @@ const NationStateSchema = z.object({
   behaviors: z
     .object({
       emoji: VersionedSchema,
-      mirv: VersionedSchema,
       alliance: VersionedSchema,
       warship: VersionedSchema,
       attack: VersionedSchema,
-      nuke: VersionedSchema,
       structure: VersionedSchema,
     })
     .nullable(),
@@ -519,7 +489,8 @@ type NationState = z.infer<typeof NationStateSchema>;
 
 export const NationExecutionSnapshot = execSnapshotType({
   name: "Nation",
-  version: 1,
+  version: 2,
+  migrations: { 1: (data) => data },
   schema: NationStateSchema,
   cls: () => NationExecution,
 });

@@ -12,7 +12,6 @@ type TestSidebar = GameRightSidebar & { updateComplete: Promise<unknown> };
 async function mount(resumedFromSave: boolean) {
   const config = {
     gameConfig: () => ({ gameType: GameType.Singleplayer }),
-    doomsdayClockConfig: () => ({ enabled: false }),
     overtimeConfig: () => ({ enabled: false, startMinutes: 0 }),
     isReplay: () => false,
     listed: false,

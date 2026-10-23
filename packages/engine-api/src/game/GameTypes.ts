@@ -21,6 +21,8 @@ export type WarshipState = {
   patrolTile?: TileRef;
   retreatPort?: TileRef;
   isInCombat?: boolean;
+  /** Troops loaded at a port or shore, unloaded as an army. */
+  cargo?: number;
   lastCombatTick: number;
   // Veterancy level (0–max) plus a shared integer progress meter fed by
   // transport kills and trade captures (see UnitImpl.addVeterancyProgress).
@@ -31,20 +33,6 @@ export type WarshipState = {
 export type TransportShipState = {
   isRetreating: boolean;
   troops: number;
-};
-
-export type NukeState = {
-  trajectory: TrajectoryTile[];
-  trajectoryIndex: number;
-  targetedBySam: boolean;
-  waitTicks: number;
-};
-
-export type SamLauncherState = {
-  upgradeStartTick?: number;
-  startRange: number;
-  targetLevel: number;
-  duration: number;
 };
 
 export const AllPlayers = "AllPlayers" as const;
@@ -163,11 +151,7 @@ export interface PublicGameModifiers {
   goldMultiplier?: number;
   isAlliancesDisabled?: boolean;
   isPortsDisabled?: boolean;
-  isNukesDisabled?: boolean;
-  isSAMsDisabled?: boolean;
   isPeaceTime?: boolean;
-  isWaterNukes?: boolean;
-  isDoomsdayClock?: boolean;
 }
 
 // Largest bulk-purchase amount an intent may carry (mirrored by the intent
@@ -193,20 +177,19 @@ function unitTypeGroup<T extends readonly UnitType[]>(types: T) {
 export enum UnitType {
   TransportShip = "Transport",
   Warship = "Warship",
-  Shell = "Shell",
-  SAMMissile = "SAMMissile",
   Port = "Port",
-  AtomBomb = "Atom Bomb",
-  HydrogenBomb = "Hydrogen Bomb",
   TradeShip = "Trade Ship",
-  MissileSilo = "Missile Silo",
   DefensePost = "Defense Post",
-  SAMLauncher = "SAM Launcher",
   City = "City",
-  MIRV = "MIRV",
-  MIRVWarhead = "MIRV Warhead",
-  Train = "Train",
-  Factory = "Factory",
+  Depot = "Depot",
+  Army = "Army",
+  Mine = "Mine",
+  Farm = "Farm",
+}
+
+/** Mines and farms are the buildings that spawn road depots. */
+export function isDepotSource(type: UnitType): boolean {
+  return type === UnitType.Mine || type === UnitType.Farm;
 }
 
 export enum TrainType {
@@ -215,27 +198,14 @@ export enum TrainType {
   Carriage = "Carriage",
 }
 
-export const Nukes = unitTypeGroup([
-  UnitType.AtomBomb,
-  UnitType.HydrogenBomb,
-  UnitType.MIRVWarhead,
-  UnitType.MIRV,
-] as const);
-
-export const BuildableAttacks = unitTypeGroup([
-  UnitType.AtomBomb,
-  UnitType.HydrogenBomb,
-  UnitType.MIRV,
-  UnitType.Warship,
-] as const);
+export const BuildableAttacks = unitTypeGroup([UnitType.Warship] as const);
 
 export const Structures = unitTypeGroup([
   UnitType.City,
   UnitType.DefensePost,
-  UnitType.SAMLauncher,
-  UnitType.MissileSilo,
   UnitType.Port,
-  UnitType.Factory,
+  UnitType.Mine,
+  UnitType.Farm,
 ] as const);
 
 export const BuildMenus = unitTypeGroup([
@@ -249,11 +219,6 @@ export const PlayerBuildable = unitTypeGroup([
 ] as const);
 
 export type PlayerBuildableUnitType = (typeof PlayerBuildable.types)[number];
-
-export type TrajectoryTile = {
-  tile: TileRef;
-  targetable: boolean;
-};
 
 export enum Relation {
   Hostile = 0,
@@ -299,6 +264,10 @@ export enum TerrainType {
   Mountain,
   Ocean,
   Impassable,
+  Coast,
+  Forest,
+  Lush,
+  Desert,
 }
 
 export enum PlayerType {
@@ -363,7 +332,7 @@ export interface BuildableUnit {
 }
 
 // Total price of buying `amount` of a buildable in one intent. Upgrades use
-// the escalating totals from core; flat-cost units (nukes) scale linearly.
+// the escalating totals from core; flat-cost units scale linearly.
 export function bulkCost(bu: BuildableUnit, amount: number): Gold {
   return bu.upgradeCosts?.[amount - 1] ?? bu.cost * BigInt(amount);
 }
@@ -385,10 +354,6 @@ export function maxBulkAmount(bu: BuildableUnit, gold: Gold): number {
   }
   return max;
 }
-
-// Fixed mid-ladder steps for the bulk menus. Bombs come in smaller batches
-// than structure upgrades — x2 is the standard play against a single SAM.
-export const NUKE_BULK_STEPS: readonly number[] = [2, 5];
 
 export const STRUCTURE_BULK_STEPS: readonly number[] = [5, 10];
 
@@ -458,13 +423,7 @@ export enum MessageType {
   ATTACK_CANCELLED,
   ATTACK_REQUEST,
   CONQUERED_PLAYER,
-  MIRV_INBOUND,
-  NUKE_INBOUND,
-  NUKE_DETONATED,
-  HYDROGEN_BOMB_INBOUND,
   NAVAL_INVASION_INBOUND,
-  SAM_MISS,
-  SAM_HIT,
   CAPTURED_ENEMY_UNIT,
   UNIT_DESTROYED,
   ALLIANCE_ACCEPTED,
@@ -481,7 +440,6 @@ export enum MessageType {
 // Message categories used for filtering events in the EventsDisplay
 export enum MessageCategory {
   ATTACK = "ATTACK",
-  NUKE = "NUKE",
   ALLIANCE = "ALLIANCE",
   TRADE = "TRADE",
   CHAT = "CHAT",
@@ -493,13 +451,7 @@ export const MESSAGE_TYPE_CATEGORIES: Record<MessageType, MessageCategory> = {
   [MessageType.ATTACK_CANCELLED]: MessageCategory.ATTACK,
   [MessageType.ATTACK_REQUEST]: MessageCategory.ATTACK,
   [MessageType.CONQUERED_PLAYER]: MessageCategory.ATTACK,
-  [MessageType.MIRV_INBOUND]: MessageCategory.NUKE,
-  [MessageType.NUKE_INBOUND]: MessageCategory.NUKE,
-  [MessageType.NUKE_DETONATED]: MessageCategory.NUKE,
-  [MessageType.HYDROGEN_BOMB_INBOUND]: MessageCategory.NUKE,
   [MessageType.NAVAL_INVASION_INBOUND]: MessageCategory.ATTACK,
-  [MessageType.SAM_MISS]: MessageCategory.ATTACK,
-  [MessageType.SAM_HIT]: MessageCategory.ATTACK,
   [MessageType.CAPTURED_ENEMY_UNIT]: MessageCategory.ATTACK,
   [MessageType.UNIT_DESTROYED]: MessageCategory.ATTACK,
   [MessageType.ALLIANCE_ACCEPTED]: MessageCategory.ALLIANCE,

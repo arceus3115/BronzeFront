@@ -47,6 +47,7 @@ describe("TrainStation", () => {
 
     player = {
       addGold: vi.fn(),
+      addFood: vi.fn(),
       addTrainGold: vi.fn(),
       id: 1,
       canTrade: vi.fn().mockReturnValue(true),
@@ -68,6 +69,7 @@ describe("TrainStation", () => {
       owner: vi.fn().mockReturnValue(player),
       level: vi.fn(),
       tradeStopsVisited: vi.fn().mockReturnValue(0),
+      originType: vi.fn().mockReturnValue(UnitType.Mine),
     } as any;
   });
 
@@ -97,6 +99,7 @@ describe("TrainStation", () => {
   it("records external trade on the station owner", () => {
     const stationOwner = {
       addGold: vi.fn(),
+      addFood: vi.fn(),
       addTrainGold: vi.fn(),
       id: 1,
       canTrade: vi.fn().mockReturnValue(true),
@@ -105,6 +108,7 @@ describe("TrainStation", () => {
     } as any;
     const trainOwner = {
       addGold: vi.fn(),
+      addFood: vi.fn(),
       addTrainGold: vi.fn(),
       id: 2,
       canTrade: vi.fn().mockReturnValue(true),

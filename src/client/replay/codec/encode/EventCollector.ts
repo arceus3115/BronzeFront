@@ -1,8 +1,7 @@
 /**
  * Collects the replay's event lists (ReplayEvents) from normalized
  * frames. The viewer uses them to rebuild things a frame doesn't carry
- * when it seeks: the rail network, dead-unit FX, nuke telegraphs and
- * destroyed map layers.
+ * when it seeks: the rail network and dead-unit FX.
  */
 
 import {
@@ -18,7 +17,6 @@ import {
   RailroadEventKind,
   type ConstructionStartEvent,
   type DeadUnitEvent,
-  type NukeImpactEvent,
   type RailroadEvent,
   type ReplayEvents,
   type ReplayMotionPlan,
@@ -27,7 +25,6 @@ import {
 
 export class EventCollector {
   // The events since the last take().
-  private nukeImpacts: NukeImpactEvent[] = [];
   private railroadEvents: RailroadEvent[] = [];
   private motionPlans: ReplayMotionPlan[] = [];
   private constructionStarts: ConstructionStartEvent[] = [];
@@ -43,14 +40,12 @@ export class EventCollector {
    */
   take(): ReplayEvents {
     const events: ReplayEvents = {
-      nukeImpacts: this.nukeImpacts,
       railroadEvents: this.railroadEvents,
       motionPlans: this.motionPlans,
       constructionStarts: this.constructionStarts,
       deadUnitEvents: this.deadUnitEvents,
       spawnPhaseEnd: this.spawnPhaseEnd,
     };
-    this.nukeImpacts = [];
     this.railroadEvents = [];
     this.motionPlans = [];
     this.constructionStarts = [];
@@ -58,8 +53,7 @@ export class EventCollector {
     return events;
   }
 
-  /** `isLand`: whether a tile is land after this frame's tick. */
-  push(frame: NormalizedFrame, isLand: (ref: number) => boolean): void {
+  push(frame: NormalizedFrame): void {
     const { tick, source: gu } = frame;
 
     const spawnEnd = gu.updates[
@@ -67,14 +61,6 @@ export class EventCollector {
     ] as SpawnPhaseEndUpdate[];
     if (spawnEnd.length > 0 && this.spawnPhaseEnd === null) {
       this.spawnPhaseEnd = { tick, startTick: spawnEnd[0].startTick };
-    }
-
-    if (gu.packedNukeImpacts !== undefined && gu.packedNukeImpacts.length > 0) {
-      const impact: NukeImpactEvent = { tick, land: [], water: [] };
-      for (const ref of gu.packedNukeImpacts) {
-        (isLand(ref) ? impact.land : impact.water).push(ref);
-      }
-      this.nukeImpacts.push(impact);
     }
 
     for (const u of gu.updates[

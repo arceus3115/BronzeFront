@@ -56,24 +56,18 @@ export function unitStateFromUpdate(u: UnitUpdate): UnitState {
       (u.transportShipState?.isRetreating ?? false) ||
       u.warshipState?.state === "retreating",
     targetable: u.targetable,
-    waitTicks: u.nukeState?.waitTicks ?? 0,
     markedForDeletion: u.markedForDeletion,
     health: u.health ?? null,
     underConstruction: u.underConstruction ?? false,
     targetUnitId: u.targetUnitId ?? null,
     targetTile: u.targetTile ?? null,
     troops: u.troops,
-    missileTimerQueue: u.missileTimerQueue,
     level: u.level,
     veterancy: u.warshipState?.veterancy ?? 0,
     hasTrainStation: u.hasTrainStation,
     trainType: trainTypeToNum(u.trainType),
     loaded: u.loaded ?? null,
     constructionStartTick: null, // GameView fills in createdAt when underConstruction
-    samUpgradeStartTick: u.samUpgrade?.upgradeStartTick ?? null,
-    samUpgradeStartRange: u.samUpgrade?.startRange ?? null,
-    samUpgradeTargetLevel: u.samUpgrade?.targetLevel ?? null,
-    samUpgradeDuration: u.samUpgrade?.duration ?? null,
   };
 }
 
@@ -90,23 +84,17 @@ export function applyUnitUpdateInPlace(target: UnitState, u: UnitUpdate): void {
     (u.transportShipState?.isRetreating ?? false) ||
     u.warshipState?.state === "retreating";
   target.targetable = u.targetable;
-  target.waitTicks = u.nukeState?.waitTicks ?? 0;
   target.markedForDeletion = u.markedForDeletion;
   target.health = u.health ?? null;
   target.underConstruction = u.underConstruction ?? false;
   target.targetUnitId = u.targetUnitId ?? null;
   target.targetTile = u.targetTile ?? null;
   target.troops = u.troops;
-  target.missileTimerQueue = u.missileTimerQueue;
   target.level = u.level;
   target.veterancy = u.warshipState?.veterancy ?? 0;
   target.hasTrainStation = u.hasTrainStation;
   target.trainType = trainTypeToNum(u.trainType);
   target.loaded = u.loaded ?? null;
-  target.samUpgradeStartTick = u.samUpgrade?.upgradeStartTick ?? null;
-  target.samUpgradeStartRange = u.samUpgrade?.startRange ?? null;
-  target.samUpgradeTargetLevel = u.samUpgrade?.targetLevel ?? null;
-  target.samUpgradeDuration = u.samUpgrade?.duration ?? null;
 }
 
 export function gamePlayerTypeToEnum(t: PlayerType): PlayerTypeEnum {
@@ -163,6 +151,10 @@ export function playerStateFromUpdate(pu: PlayerUpdate): PlayerState {
     deathPosition: pu.deathPosition ?? null,
     tilesOwned: pu.tilesOwned!,
     gold: Number(pu.gold!),
+    food: Number(pu.food ?? 0n),
+    science: Number(pu.science ?? 0n),
+    bronzeWeapons: pu.bronzeWeapons ?? false,
+    markets: pu.markets ?? false,
     tradeGold: Number(pu.tradeGold ?? 0n),
     trainGold: Number(pu.trainGold ?? 0n),
     piracyGold: Number(pu.piracyGold ?? 0n),
@@ -170,9 +162,6 @@ export function playerStateFromUpdate(pu: PlayerUpdate): PlayerState {
     troops: pu.troops!,
     isTraitor: pu.isTraitor!,
     traitorRemainingTicks: Math.max(0, pu.traitorRemainingTicks ?? 0),
-    inDoomsdayClock: pu.inDoomsdayClock ?? false,
-    isDecaying: pu.isDecaying ?? false,
-    markedDoomsdayClockTick: pu.markedDoomsdayClockTick ?? -1,
     betrayals: pu.betrayals!,
     hasSpawned: pu.hasSpawned!,
     spawnTile: pu.spawnTile,

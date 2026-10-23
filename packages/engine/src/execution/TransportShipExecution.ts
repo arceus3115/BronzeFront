@@ -211,7 +211,7 @@ export class TransportShipExecution implements Execution {
       this.motionPlanDst = null; // Force motion plan re-recording
     }
 
-    // Auto-retreat if destination was destroyed by nuke (turned to water)
+    // Auto-retreat if the destination tile is no longer land
     // Checked every tick (not just on graph rebuild) because graph rebuilds
     // are throttled and the tile may already be water before the version bumps.
     if (this.dst !== null && this.mg.isWater(this.dst)) {

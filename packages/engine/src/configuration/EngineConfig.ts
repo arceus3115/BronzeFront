@@ -10,7 +10,6 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import { PlayerLike } from "@openfront/engine-api/game/ReadViews";
 import { TeamCountConfig } from "@openfront/engine-api/Schemas";
-import { NukeType } from "@openfront/engine-api/StatsSchemas";
 import { Config } from "@openfront/engine-lib/configuration/Config";
 import { exp, log, pow2 } from "@openfront/engine-lib/DetMath";
 import {
@@ -19,7 +18,7 @@ import {
   toInt,
   within,
 } from "@openfront/engine-lib/Util";
-import type { EngineUnitInfo, Game, Player, Unit } from "../game/Game";
+import type { EngineUnitInfo, Game, Player } from "../game/Game";
 
 export interface AttackLogicInput {
   terrain: TerrainType;
@@ -36,8 +35,6 @@ export interface AttackLogicInput {
   } | null;
   /** A defense post owned by the defender is in range of the tile. */
   defenderHasDefensePost: boolean;
-  /** Fraction of land tiles with fallout, or null if the tile has no fallout. */
-  falloutRatio: number | null;
   /** Tiles on the attack front this tick (plus jitter); fixed for the tick. */
   borderSize: number;
 }
@@ -105,9 +102,14 @@ function terrainAttackBase(terrain: TerrainType): {
 } {
   switch (terrain) {
     case TerrainType.Plains:
+    case TerrainType.Desert:
       return { mag: 80, tileCost: 16.5 };
     case TerrainType.Highland:
+    case TerrainType.Forest:
       return { mag: 100, tileCost: 20 };
+    case TerrainType.Lush:
+    case TerrainType.Coast:
+      return { mag: 90, tileCost: 18 };
     case TerrainType.Mountain:
       return { mag: 120, tileCost: 25 };
     case TerrainType.Impassable:
@@ -119,7 +121,7 @@ function terrainAttackBase(terrain: TerrainType): {
 
 /**
  * The engine's rules: everything in Config plus the tunables only the
- * simulation reads (attack resolution, costs, warships, nukes, trade).
+ * simulation reads (attack resolution, costs, warships, trade).
  */
 export class EngineConfig extends Config {
   private engineUnitInfoCache = new Map<UnitType, EngineUnitInfo>();
@@ -130,12 +132,6 @@ export class EngineConfig extends Config {
 
   teamLandShareWinThresholdTenths(): number {
     return 7;
-  }
-
-  falloutDefenseModifier(falloutRatio: number): number {
-    // falloutRatio is between 0 and 1
-    // So defense modifier is between [5, 2.5]
-    return 5 - falloutRatio * 2;
   }
 
   defensePostDefenseBonus(): number {
@@ -160,11 +156,16 @@ export class EngineConfig extends Config {
   disableNavMesh(): boolean {
     return this._gameConfig.disableNavMesh ?? false;
   }
-  waterNukes(): boolean {
-    return this._gameConfig.waterNukes ?? false;
-  }
   infiniteGold(): boolean {
     return this._gameConfig.infiniteGold;
+  }
+
+  infiniteFood(): boolean {
+    return this._gameConfig.infiniteFood ?? false;
+  }
+
+  infiniteScience(): boolean {
+    return this._gameConfig.infiniteScience ?? false;
   }
   donateGold(): boolean {
     return this._gameConfig.donateGold;
@@ -177,6 +178,34 @@ export class EngineConfig extends Config {
       return 0n;
     }
     return this.startingGoldFor(playerInfo);
+  }
+
+  startingFood(playerInfo: PlayerInfo): Gold {
+    if (playerInfo.playerType === PlayerType.Bot) return 0n;
+    const base = BigInt(this._gameConfig.startingFood ?? 0);
+    const extra = this._gameConfig.hostCheats?.startingFood;
+    if (extra && playerInfo.isLobbyCreator) return base + BigInt(extra);
+    return base;
+  }
+
+  startingScience(playerInfo: PlayerInfo): Gold {
+    if (playerInfo.playerType === PlayerType.Bot) return 0n;
+    const base = BigInt(this._gameConfig.startingScience ?? 0);
+    const extra = this._gameConfig.hostCheats?.startingScience;
+    if (extra && playerInfo.isLobbyCreator) return base + BigInt(extra);
+    return base;
+  }
+
+  foodMultiplier(): number {
+    return this._gameConfig.foodMultiplier ?? 1;
+  }
+
+  scienceMultiplier(): number {
+    return this._gameConfig.scienceMultiplier ?? 1;
+  }
+
+  meleeRange(): number {
+    return 15;
   }
 
   /**
@@ -282,8 +311,8 @@ export class EngineConfig extends Config {
    *
    * The midpoint was 230 in v34.0. v33's was 400, so fleets of 150-350 —
    * reached within the opening minutes of a 40+ player lobby — ran 30-64%
-   * below v33's spawn odds, which is where the "no early gold for nukes"
-   * deficit lived; the opening (<130 ships) was already above v33 via a
+   * below v33's spawn odds, which is where the early-gold deficit lived;
+   * the opening (<130 ships) was already above v33 via a
    * fleet-size boost. 330 restores that window to near-v33 while the
    * plateau keeps everything past ~450 ships (the late game) numerically
    * unchanged.
@@ -347,51 +376,31 @@ export class EngineConfig extends Config {
         return this.costWrapper(
           (numUnits: number) => Math.min(1_000_000, pow2(numUnits) * 125_000),
           UnitType.Port,
-          UnitType.Factory,
+          UnitType.Mine,
+          UnitType.Farm,
         );
-      case UnitType.AtomBomb:
-        return this.costWrapper(() => 750_000, UnitType.AtomBomb);
-      case UnitType.HydrogenBomb:
-        return this.costWrapper(() => 5_000_000, UnitType.HydrogenBomb);
-      case UnitType.MIRV:
-        return (game: Game, player: Player) => {
-          if (
-            player.type() === PlayerType.Human &&
-            this.hasInfiniteGoldFor(player)
-          ) {
-            return 0n;
-          }
-          return 25_000_000n + BigInt(game.mirvsLaunched()) * 15_000_000n;
-        };
-      case UnitType.MissileSilo:
-        return this.costWrapper(() => 1_000_000, UnitType.MissileSilo);
       case UnitType.DefensePost:
         return this.costWrapper(
           (numUnits: number) => Math.min(250_000, (numUnits + 1) * 50_000),
           UnitType.DefensePost,
-        );
-      case UnitType.SAMLauncher:
-        return this.costWrapper(
-          (numUnits: number) => Math.min(3_000_000, (numUnits + 1) * 1_500_000),
-          UnitType.SAMLauncher,
         );
       case UnitType.City:
         return this.costWrapper(
           (numUnits: number) => Math.min(1_000_000, pow2(numUnits) * 125_000),
           UnitType.City,
         );
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         return this.costWrapper(
           (numUnits: number) => Math.min(1_000_000, pow2(numUnits) * 125_000),
-          UnitType.Factory,
+          UnitType.Mine,
+          UnitType.Farm,
           UnitType.Port,
         );
       case UnitType.TransportShip:
-      case UnitType.Shell:
-      case UnitType.SAMMissile:
-      case UnitType.MIRVWarhead:
       case UnitType.TradeShip:
-      case UnitType.Train:
+      case UnitType.Depot:
+      case UnitType.Army:
         return () => 0n;
       default:
         assertNever(type);
@@ -528,11 +537,6 @@ export class EngineConfig extends Config {
       mag *= this.defensePostDefenseBonus();
       tileCost *= this.defensePostSpeedBonus();
     }
-    if (input.falloutRatio !== null) {
-      const fallout = this.falloutDefenseModifier(input.falloutRatio);
-      mag *= fallout;
-      tileCost *= fallout;
-    }
 
     if (defender === null) {
       const tickBudget = input.borderSize * 2;
@@ -620,10 +624,6 @@ export class EngineConfig extends Config {
     return Math.floor(attacker.troops() / 5);
   }
 
-  warshipShellLifetime(): number {
-    return 20; // in ticks (one tick is 100ms)
-  }
-
   radiusPortSpawn() {
     return 20;
   }
@@ -676,87 +676,12 @@ export class EngineConfig extends Config {
     return BigInt(Math.floor(Number(baseRate) * multiplier));
   }
 
-  nukeSpeed(unitType: UnitType): number {
-    switch (unitType) {
-      case UnitType.AtomBomb:
-      case UnitType.HydrogenBomb:
-        return 10;
-      case UnitType.MIRV:
-        return 15;
-      case UnitType.MIRVWarhead:
-        return 22;
-    }
-    throw new Error(`Unknown nuke type: ${unitType}`);
-  }
-
-  mirvNormalizeTargetTicks(): number {
-    return 14;
-  }
-
-  defaultNukeTargetableRange(): number {
-    return 150;
-  }
-
-  defaultSamRange(): number {
-    return 70;
-  }
-
-  samUpgradeDuration(): number {
-    return Math.floor(this.SAMCooldown() / 2);
-  }
-
-  dynamicSamRange(sam: Unit, currentTick: number): number {
-    const state = sam.samLauncherState();
-    if (state === undefined || state.upgradeStartTick === undefined) {
-      return this.samRange(sam.level());
-    }
-    const duration = state.duration ?? this.samUpgradeDuration();
-    const elapsed = currentTick - state.upgradeStartTick;
-    if (elapsed >= duration) {
-      return this.samRange(state.targetLevel);
-    }
-    const targetRange = this.samRange(state.targetLevel);
-    const diff = targetRange - state.startRange;
-    return state.startRange + (diff * elapsed) / duration;
-  }
-
-  defaultSamMissileSpeed(): number {
-    return 12;
-  }
-
-  // Humans can be soldiers, soldiers attacking, soldiers in boat etc.
-  nukeDeathFactor(
-    nukeType: NukeType,
-    humans: number,
-    tilesOwned: number,
-    maxTroops: number,
-  ): number {
-    if (nukeType !== UnitType.MIRVWarhead) {
-      return (5 * humans) / Math.max(1, tilesOwned);
-    }
-    const targetTroops = 0.03 * maxTroops;
-    const excessTroops = Math.max(0, humans - targetTroops);
-    const scalingFactor = 500;
-
-    const steepness = 2;
-    const normalizedExcess = excessTroops / maxTroops;
-    return scalingFactor * (1 - exp(-steepness * normalizedExcess));
-  }
-
-  shellLifetime(): number {
-    return 50;
-  }
-
   warshipPatrolRange(): number {
     return 100;
   }
 
   warshipTargettingRange(): number {
     return 130;
-  }
-
-  warshipShellAttackRate(): number {
-    return 20;
   }
 
   warshipDockingRange(): number {
@@ -792,12 +717,6 @@ export class EngineConfig extends Config {
     return 3;
   }
 
-  /** Shell-damage boost per veterancy level, as an integer percent of the
-   *  rolled damage. Integer-only to keep the engine deterministic. */
-  warshipVeterancyShellDamageBonus(): number {
-    return 20;
-  }
-
   /** Transport ships a warship must destroy to gain one veterancy level. */
   warshipVeterancyTransportKills(): number {
     return 10;
@@ -808,15 +727,7 @@ export class EngineConfig extends Config {
     return 25;
   }
 
-  defensePostShellAttackRate(): number {
-    return 100;
-  }
-
   safeFromPiratesCooldownMax(): number {
     return 20;
-  }
-
-  defensePostTargettingRange(): number {
-    return 75;
   }
 }

@@ -81,3 +81,28 @@ export function nationData(n: Nation): z.infer<typeof NationSchema> {
 }
 
 export const UnitTypeSchema = z.enum(UnitType);
+
+const RETIRED_UNIT_TYPES = new Set([
+  "Nuke",
+  "Atom Bomb",
+  "Hydrogen Bomb",
+  "MIRV",
+  "MIRV Warhead",
+  "SAMMissile",
+  "SAMLauncher",
+  "SAM Launcher",
+  "MissileSilo",
+  "Missile Silo",
+  "Shell",
+]);
+
+/**
+ * Old saves name the depot "Train" and the mine "Factory". Missile units are
+ * gone; a leftover one restores as a defense post so the save still loads.
+ */
+export function migrateUnitTypeName(type: string): string {
+  if (type === "Train") return "Depot";
+  if (type === "Factory") return "Mine";
+  if (RETIRED_UNIT_TYPES.has(type)) return "Defense Post";
+  return type;
+}

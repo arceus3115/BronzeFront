@@ -5,7 +5,6 @@ import type {
   DeadUnitFx,
   FrameData,
   NameEntry,
-  NukeTelegraphData,
   PlayerState,
   PlayerStatusData,
   UnitState,
@@ -39,7 +38,6 @@ export interface FrameUploadTarget {
   applyConquestEvents(events: ConquestFx[]): void;
   applyBonusEvents(events: BonusEvent[]): void;
   updateAttackRings(rings: AttackRingInput[]): void;
-  updateNukeTelegraphs(data: NukeTelegraphData[]): void;
   updateNames(
     names: ReadonlyMap<string, NameEntry>,
     players: ReadonlyMap<number, PlayerState>,
@@ -47,7 +45,6 @@ export interface FrameUploadTarget {
     statusData?: ReadonlyMap<number, PlayerStatusData>,
   ): void;
   updateRelations(data: Uint8Array, size: number): void;
-  setSAMAllianceClusters(clusters: ReadonlyMap<number, number>): void;
 }
 
 /**
@@ -107,9 +104,7 @@ export function uploadFrameData(
     view.applyBonusEvents(frame.events.bonusEvents);
   }
 
-  // --- Attack rings + nuke telegraphs ---
   view.updateAttackRings(frame.attackRings);
-  view.updateNukeTelegraphs(frame.nukeTelegraphs);
 
   // --- Names + player status ---
   view.updateNames(frame.names, frame.players, false, frame.playerStatus);
@@ -120,7 +115,4 @@ export function uploadFrameData(
   if (frame.relationsDirty) {
     view.updateRelations(frame.relationMatrix, frame.relationSize);
   }
-
-  // --- Alliance clusters (SAM pass) ---
-  view.setSAMAllianceClusters(frame.allianceClusters);
 }

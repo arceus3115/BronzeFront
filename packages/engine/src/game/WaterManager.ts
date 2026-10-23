@@ -42,8 +42,8 @@ interface CraterBounds {
 export class WaterManager {
   private _miniWaterGraph: AbstractGraph | null = null;
   private _miniWaterHPA: AStarWaterHierarchical | null = null;
-  // Persistent minimap water components, updated incrementally as nukes
-  // convert land→water (components only grow/merge, never split), so
+  // Persistent minimap water components, updated incrementally as land
+  // turns to water (components only grow/merge, never split), so
   // graph rebuilds skip the full-minimap flood fill.
   private _miniWaterCC: ConnectedComponents | null = null;
   // Reusable minimap-sized BFS scratch for graph rebuilds (~20MB on
@@ -56,7 +56,7 @@ export class WaterManager {
   private _pendingWaterTiles: Set<TileRef> = new Set();
   private _dirtyMiniTiles: Set<TileRef> = new Set();
 
-  // Reusable stamp-based distance tracking for magnitude BFS (avoids allocation per nuke)
+  // Reusable stamp-based distance tracking for magnitude BFS (avoids allocation per conversion)
   private _waterDistArr: Uint16Array | null = null;
   private _waterStampArr: Uint16Array | null = null;
   private _waterStamp: number = 0;
@@ -113,7 +113,7 @@ export class WaterManager {
    *
    * The water graph is rebuilt from the restored components rather than
    * stored. While the graph is dirty (up to WATER_GRAPH_REBUILD_INTERVAL
-   * ticks after a water nuke) the live game still routes on the stale graph,
+   * ticks after land turns to water) the live game still routes on the stale graph,
    * which a restore cannot reproduce.
    */
   restoreSnapshot(s: WaterManagerState): void {
@@ -157,9 +157,6 @@ export class WaterManager {
           !this.map.hasOwner(tile) &&
           !this.map.isImpassable(tile)
         ) {
-          if (this.map.hasFallout(tile)) {
-            this.map.setFallout(tile, false);
-          }
           this.map.setWater(tile);
           converted.push(tile);
         }
@@ -177,7 +174,7 @@ export class WaterManager {
       !this.disableNavMesh &&
       // Keep terrain fixup and graph rebuilding out of the same tick. The
       // graph is already allowed to remain stale between throttled rebuilds,
-      // and a one-tick delay avoids combining both water-nuke CPU spikes.
+      // and a one-tick delay avoids combining both conversion CPU spikes.
       !convertedThisTick &&
       currentTick - this._waterGraphLastRebuildTick >=
         WATER_GRAPH_REBUILD_INTERVAL
@@ -380,10 +377,10 @@ export class WaterManager {
       this._waterStamp = 0;
     }
     // Magnitude BFS: recompute ceil(manhattan_dist_to_nearest_coast / 2)
-    // for tiles affected by the nuke.
+    // for tiles affected by the conversion.
     //
     // Converted tiles are first grouped into spatially separate craters so
-    // that simultaneous distant nukes (barrages, MIRVs) each get a small
+    // that simultaneous distant conversions each get a small
     // local BFS instead of one bounding box spanning most of the map.
     const groups = this.computeCraterGroups(converted, w, MAX_MAG_DIST);
     for (const g of groups) {
@@ -499,7 +496,7 @@ export class WaterManager {
     DebugSpan.start("miniMagnitude");
     // ── 4b. Fix minimap ocean + magnitude for converted tiles ────
     // setWater() zeros the terrain byte (magnitude = 0, ocean = 0).
-    // This makes the pathfinder treat nuked water as "too close to
+    // This makes the pathfinder treat fresh water as "too close to
     // shore" (3× cost penalty via getMagnitudePenalty) and prevents
     // LOS smoothing through the crater.  Propagate ocean bits from
     // existing neighbours and recompute minimap magnitudes via BFS
@@ -560,7 +557,7 @@ export class WaterManager {
       // The previous approach (sampling full-map magnitudes) was wrong:
       // existing minimap water tiles at the edge of the crater retain
       // stale pre-computed magnitudes from the terrain file.  When a
-      // nuke creates a new coastline nearby, these tiles should have
+      // conversion creates a new coastline nearby, these tiles should have
       // LOWER magnitude (closer to the new coast).  Only a BFS on the
       // minimap can correctly recompute them.
       //
@@ -634,7 +631,7 @@ export class WaterManager {
    * Tiles are bucketed into coarse cells of maxMagDist, adjacent occupied
    * cells are unioned into groups, and groups are then merged whenever
    * merging shrinks the total BFS work (union box area smaller than the
-   * separate box areas combined).  Far-apart simultaneous nukes therefore
+   * separate box areas combined).  Far-apart simultaneous conversions therefore
    * keep small independent BFS boxes, while dense clusters collapse into
    * one box instead of overlapping duplicates.
    *

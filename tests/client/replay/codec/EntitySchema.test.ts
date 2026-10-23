@@ -27,7 +27,7 @@ import {
   type UnitFields,
 } from "../../../../src/client/replay/codec/EntitySchema";
 
-const unitTypes = ["City", "Warship", "Train"];
+const unitTypes = ["City", "Warship", "Depot"];
 const encodeCtx: EncodeCtx = { unitTypeIndex: (t) => unitTypes.indexOf(t) };
 const decodeCtx: DecodeCtx = { unitTypes };
 
@@ -41,6 +41,10 @@ const basePlayer: PlayerState = {
   deathPosition: null,
   tilesOwned: 1200,
   gold: 50_000,
+  food: 10,
+  science: 0,
+  bronzeWeapons: false,
+  markets: false,
   tradeGold: 100,
   trainGold: 200,
   piracyGold: 0,
@@ -48,9 +52,6 @@ const basePlayer: PlayerState = {
   troops: 25_000,
   isTraitor: false,
   traitorRemainingTicks: 0,
-  inDoomsdayClock: false,
-  isDecaying: false,
-  markedDoomsdayClockTick: -1,
   betrayals: 0,
   hasSpawned: true,
   spawnTile: 4242,
@@ -72,6 +73,10 @@ const playerAlternatives: { [K in keyof PlayerFields]: PlayerFields[K] } = {
   deathPosition: 123_456,
   tilesOwned: 1205,
   gold: 50_000.5, // fractional → f64 escape
+  food: 40,
+  science: 25,
+  bronzeWeapons: true,
+  markets: true,
   tradeGold: 100 + 40_000, // beyond i16 → f64 escape
   trainGold: 150, // negative delta
   piracyGold: 2 ** 40, // huge
@@ -79,9 +84,6 @@ const playerAlternatives: { [K in keyof PlayerFields]: PlayerFields[K] } = {
   troops: 24_990,
   isTraitor: true,
   traitorRemainingTicks: 300,
-  inDoomsdayClock: true,
-  isDecaying: true,
-  markedDoomsdayClockTick: 9000,
   betrayals: 2,
   hasSpawned: false,
   spawnTile: undefined,
@@ -128,28 +130,22 @@ const baseUnit: UnitState = {
   reachedTarget: false,
   retreating: false,
   targetable: true,
-  waitTicks: 0,
   markedForDeletion: false,
   health: 1000,
   underConstruction: false,
   targetUnitId: null,
   targetTile: null,
   troops: 0,
-  missileTimerQueue: [],
   level: 1,
   veterancy: 0,
   hasTrainStation: false,
   trainType: null,
   loaded: null,
   constructionStartTick: null,
-  samUpgradeStartTick: null,
-  samUpgradeStartRange: null,
-  samUpgradeTargetLevel: null,
-  samUpgradeDuration: null,
 };
 
 const unitAlternatives: { [K in keyof UnitFields]: UnitFields[K] } = {
-  unitType: "Train",
+  unitType: "Depot",
   ownerID: 8,
   lastOwnerID: 7,
   pos: 4_000_000,
@@ -158,23 +154,17 @@ const unitAlternatives: { [K in keyof UnitFields]: UnitFields[K] } = {
   reachedTarget: true,
   retreating: true,
   targetable: false,
-  waitTicks: 12,
   markedForDeletion: 5000,
   health: null,
   underConstruction: true,
   targetUnitId: 12,
   targetTile: 77,
   troops: 3_000_000,
-  missileTimerQueue: [100_000, 100_050],
   level: 3,
   veterancy: 2,
   hasTrainStation: true,
   trainType: 2,
   loaded: true,
-  samUpgradeStartTick: 400,
-  samUpgradeStartRange: 70.5,
-  samUpgradeTargetLevel: 2,
-  samUpgradeDuration: 150,
 };
 
 function roundTripFull<T>(

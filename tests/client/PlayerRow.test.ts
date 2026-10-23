@@ -12,9 +12,6 @@ const basePlayer: PlayerInfo = {
   gold: [],
   conquests: [],
   winner: false,
-  atoms: 0,
-  hydros: 0,
-  mirv: 0,
 };
 
 type RowOptions = {
@@ -183,13 +180,9 @@ describe("PlayerRow", () => {
     expect(score.classList.contains("font-mono")).toBe(true);
   });
 
-  it("uses the same typography for kill, bomb, and economy values", async () => {
+  it("uses the same typography for conquest and economy values", async () => {
     const sharedClasses = ["text-sm", "font-mono", "font-bold", "tabular-nums"];
-    const rankTypes = [
-      RankType.ConquestHumans,
-      RankType.Atoms,
-      RankType.TotalGold,
-    ];
+    const rankTypes = [RankType.ConquestHumans, RankType.TotalGold];
 
     for (const rankType of rankTypes) {
       row?.remove();
@@ -201,23 +194,6 @@ describe("PlayerRow", () => {
     }
   });
 
-  it("shows only the selected bomb metric", async () => {
-    row = await mountRow({
-      player: { atoms: 11, hydros: 22, mirv: 33 },
-      rankType: RankType.Hydros,
-      score: 22,
-    });
-
-    const scores = row.querySelectorAll("[data-player-score]");
-    expect(scores).toHaveLength(1);
-    expect(scores[0].textContent?.trim()).toBe("22");
-    expect(scores[0].getAttribute("aria-label")).toContain(
-      "game_info_modal.hydros",
-    );
-    expect(scores[0].textContent).not.toContain("11");
-    expect(scores[0].textContent).not.toContain("33");
-    expect(scores[0].classList.contains("border")).toBe(false);
-  });
 
   it("renders economy values without a surrounding card", async () => {
     row = await mountRow({ rankType: RankType.TotalGold, score: 12_345 });
@@ -245,17 +221,6 @@ describe("PlayerRow", () => {
           ? "game_info_modal.train_trade"
           : "game_info_modal.naval_trade",
       );
-    },
-  );
-
-  it.each([RankType.Atoms, RankType.Hydros, RankType.MIRV])(
-    "labels the selected bomb score for %s",
-    async (rankType) => {
-      row = await mountRow({ rankType, score: 7 });
-
-      expect(
-        row.querySelector("[data-player-score]")?.getAttribute("aria-label"),
-      ).toContain(`game_info_modal.${rankType.toLowerCase()}`);
     },
   );
 });

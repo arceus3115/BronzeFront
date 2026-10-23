@@ -190,11 +190,7 @@ export type SpecialModifierKey =
   | "startingGold25M"
   | "goldMultiplier"
   | "isAlliancesDisabled"
-  | "isNukesDisabled"
-  | "isSAMsDisabled"
-  | "isPeaceTime"
-  | "isWaterNukes"
-  | "isDoomsdayClock";
+  | "isPeaceTime";
 
 export interface MapInfo {
   /** GameMapType enum key — the UpperCamelCase folder name. */
@@ -243,8 +239,6 @@ export interface MapLayer {
   id: string;
   /** Whether the layer sits on land or water tiles. */
   placement: LayerPlacement;
-  /** If true, the layer is permanently destroyed in nuke impact radii. */
-  nukeable?: boolean;
 }
 
 export const maps: readonly MapInfo[] = [
@@ -296,7 +290,6 @@ export const maps: readonly MapInfo[] = [
     teamFrequency: -1,
     specialFrequency: -1,
     defaultNationCount: 30,
-    forcedModifiers: ["isWaterNukes:75"],
     themes: ["europe"],
   },
   {
@@ -333,7 +326,6 @@ export const maps: readonly MapInfo[] = [
     teamFrequency: 0,
     specialFrequency: -1,
     defaultNationCount: 20,
-    forcedModifiers: ["isWaterNukes:50"],
     themes: ["europe"],
   },
   {
@@ -397,7 +389,6 @@ export const maps: readonly MapInfo[] = [
     specialFrequency: -1,
     defaultNationCount: 11,
     specialTeamCount: 2,
-    forcedModifiers: ["isWaterNukes:50"],
     themes: ["asia"],
   },
   {
@@ -411,7 +402,6 @@ export const maps: readonly MapInfo[] = [
     specialFrequency: -1,
     defaultNationCount: 0,
     specialTeamCount: 2,
-    forcedModifiers: ["isWaterNukes:50"],
   },
   {
     id: "BajaCalifornia",
@@ -548,7 +538,7 @@ export const maps: readonly MapInfo[] = [
     defaultNationCount: 43,
     specialTeamCount: 27,
     themes: ["space", "war"],
-    layers: [{ id: "brland", placement: "land", nukeable: true }],
+    layers: [{ id: "brland", placement: "land" }],
   },
   {
     id: "BranchingPaths",
@@ -809,7 +799,6 @@ export const maps: readonly MapInfo[] = [
     specialFrequency: -1,
     defaultNationCount: 32,
     specialTeamCount: 4,
-    forcedModifiers: ["isWaterNukes:50"],
   },
   {
     id: "ClearwaterLakes",
@@ -990,7 +979,6 @@ export const maps: readonly MapInfo[] = [
     specialFrequency: -1,
     defaultNationCount: 4,
     specialTeamCount: 4,
-    forcedModifiers: ["isWaterNukes:50"],
   },
   {
     id: "France",
@@ -1867,7 +1855,6 @@ export const maps: readonly MapInfo[] = [
     specialFrequency: -1,
     defaultNationCount: 25,
     specialTeamCount: 2,
-    forcedModifiers: ["isWaterNukes:50"],
   },
   {
     id: "Madagascar",
@@ -1880,7 +1867,6 @@ export const maps: readonly MapInfo[] = [
     specialFrequency: -1,
     defaultNationCount: 34,
     specialTeamCount: 2,
-    forcedModifiers: ["isWaterNukes:50"],
     themes: ["africa"],
   },
   {
@@ -2075,7 +2061,7 @@ export const maps: readonly MapInfo[] = [
     specialTeamCount: 13,
     themes: ["scary", "fantasy"],
     layers: [
-      { id: "eyeland", placement: "land", nukeable: true },
+      { id: "eyeland", placement: "land" },
       { id: "eyewater", placement: "water" },
     ],
   },
@@ -2218,7 +2204,7 @@ export const maps: readonly MapInfo[] = [
     teamFrequency: 0,
     specialFrequency: -1,
     defaultNationCount: 53,
-    forcedModifiers: ["isWaterNukes:50", "startingGold5M:100"],
+    forcedModifiers: ["startingGold5M:100"],
     themes: ["space"],
     customTribes: [
       { name: "Actaea", coordinates: [237, 727] },
@@ -2380,7 +2366,6 @@ export const maps: readonly MapInfo[] = [
     teamFrequency: -1,
     specialFrequency: -1,
     defaultNationCount: 13,
-    forcedModifiers: ["isWaterNukes:75"],
   },
   {
     id: "TierraDelFuego",

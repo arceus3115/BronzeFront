@@ -31,7 +31,6 @@ export function mergeAppends(appends: readonly ReplayAppend[]): ReplayAppend {
     players: [],
     unitTypes: [],
     events: {
-      nukeImpacts: [],
       railroadEvents: [],
       motionPlans: [],
       constructionStarts: [],

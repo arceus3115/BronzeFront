@@ -765,7 +765,7 @@ describe("NationStructureBehavior.getAttackFrontTiles", () => {
     ownerFn: (tile: number) => any,
   ): any {
     return {
-      config: () => ({ nukeMagnitudes: () => ({ outer: 50 }) }),
+      config: () => ({}),
       neighbors: neighborsFn,
       neighbors4: (tile: number, out: number[]) => {
         const ns = neighborsFn(tile);
@@ -974,7 +974,7 @@ describe("NationStructureBehavior.doHandleStructures — crowded-map exception",
         }),
         startingGold: () => 0n,
       }),
-      sharedWaterComponents: () => null, // landlocked -> Factory preferred
+      sharedWaterComponents: () => null, // landlocked -> Farm preferred
       nations: () => Array(400).fill({}),
       numLandTiles: () => 1_000_000, // 400 / 1_000_000 > 1/7500 -> high density
     };
@@ -988,14 +988,14 @@ describe("NationStructureBehavior.doHandleStructures — crowded-map exception",
     };
   }
 
-  it("builds a Factory (not a City) on the very first structure decision", () => {
+  it("builds a Farm (not a City) on the very first structure decision", () => {
     const behavior = makeBehavior(makeCrowdedGame(), makeCrowdedPlayer());
     const spy = vi
       .spyOn(behavior as any, "maybeSpawnStructure")
       .mockReturnValue(true);
 
     expect((behavior as any).doHandleStructures()).toBe(true);
-    expect(spy).toHaveBeenCalledWith(UnitType.Factory);
+    expect(spy).toHaveBeenCalledWith(UnitType.Farm);
     expect(spy).not.toHaveBeenCalledWith(UnitType.City);
   });
 
@@ -1008,33 +1008,9 @@ describe("NationStructureBehavior.doHandleStructures — crowded-map exception",
 
     expect((behavior as any).doHandleStructures()).toBe(true);
     expect(spy).toHaveBeenCalledWith(UnitType.City);
-    expect(spy).not.toHaveBeenCalledWith(UnitType.Factory);
+    expect(spy).not.toHaveBeenCalledWith(UnitType.Farm);
   });
 
-  it("still gets its chance after the high-gold SAM-first branch has already placed the nation's literal first structure", () => {
-    const game = makeCrowdedGame({ difficulty: Difficulty.Impossible });
-    game.config = () => ({
-      isUnitDisabled: () => false,
-      gameConfig: () => ({ difficulty: Difficulty.Impossible }),
-      startingGold: () => 10_000_000n, // high starting gold
-    });
-    const behavior = makeBehavior(game, makeCrowdedPlayer());
-    const spy = vi
-      .spyOn(behavior as any, "maybeSpawnStructure")
-      .mockReturnValue(true);
-
-    // Structure #1: the unrelated high-gold SAM-first branch fires.
-    expect((behavior as any).doHandleStructures()).toBe(true);
-    expect(spy).toHaveBeenLastCalledWith(UnitType.SAMLauncher);
-    expect((behavior as any).builtCrowdedMapFirstStructure).toBe(false);
-    (behavior as any).placementsCount = 1; // what handleStructures() would do
-
-    // Structure #2: the crowded-map branch must still fire here, not be
-    // skipped just because placementsCount is no longer 0.
-    expect((behavior as any).doHandleStructures()).toBe(true);
-    expect(spy).toHaveBeenLastCalledWith(UnitType.Factory);
-    expect((behavior as any).builtCrowdedMapFirstStructure).toBe(true);
-  });
 });
 
 // 25s pass between a high-starting-gold nation's second and third structure, unless it has so

@@ -130,7 +130,8 @@ interface MinuteRow {
   trainStops: number;
   /** Live structure / unit counts at the end of the minute. */
   ports: number;
-  factories: number;
+  farms: number;
+  mines: number;
   cities: number;
   tradeShipsAtSea: number;
   trainsRunning: number;
@@ -194,10 +195,11 @@ async function runNationGame(minutes: number): Promise<{
       shipsArrived: tally.shipsArrived - prev.shipsArrived,
       trainStops: tally.trainStops - prev.trainStops,
       ports: game.units(UnitType.Port).length,
-      factories: game.units(UnitType.Factory).length,
+      farms: game.units(UnitType.Farm).length,
+      mines: game.units(UnitType.Mine).length,
       cities: game.units(UnitType.City).length,
       tradeShipsAtSea: game.units(UnitType.TradeShip).length,
-      trainsRunning: game.units(UnitType.Train).length,
+      trainsRunning: game.units(UnitType.Depot).length,
     });
     prev = { ...tally };
   }

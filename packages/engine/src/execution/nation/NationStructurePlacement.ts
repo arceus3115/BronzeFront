@@ -115,53 +115,14 @@ export class NationStructurePlacement {
     switch (type) {
       case UnitType.City:
         return this.cityValue();
-      case UnitType.MissileSilo:
-        return this.missileSiloValue();
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         return this.factoryValue();
       case UnitType.Port:
         return this.portValue();
-      case UnitType.SAMLauncher:
-        return this.samLauncherValue();
       default:
         throw new Error(`Value function not implemented for ${type}`);
     }
-  }
-
-  /**
-   * Value function for MissileSilo.
-   * Prefers high elevation, distance from border, and spacing from same-type structures.
-   */
-  private missileSiloValue(): (tile: TileRef) => number {
-    const game = this.game;
-    const borderTiles = this.player.borderTiles();
-    const otherUnits = this.player.units(UnitType.MissileSilo);
-    const { borderSpacing, structureSpacing } = this.spacingConstants();
-
-    return (tile) => {
-      let w = 0;
-
-      // Prefer higher elevations
-      w += game.magnitude(tile);
-
-      // Prefer to be away from the border
-      // Clamped at borderSpacing, so the ring search may stop there.
-      const closestBorderDist = nearestTileDistCapped(
-        game,
-        borderTiles,
-        tile,
-        borderSpacing,
-      );
-      w += Math.min(closestBorderDist, borderSpacing);
-
-      // Prefer to be away from other structures of the same type
-      const otherTiles: Set<TileRef> = new Set(otherUnits.map((u) => u.tile()));
-      otherTiles.delete(tile);
-      const d = nearestTileDist(game, otherTiles, tile);
-      if (d !== Infinity) w += Math.min(d, structureSpacing);
-
-      return w;
-    };
   }
 
   /**
@@ -198,7 +159,10 @@ export class NationStructurePlacement {
     const game = this.game;
     const player = this.player;
     const borderTiles = this.player.borderTiles();
-    const otherUnits = player.units(UnitType.Factory);
+    const otherUnits = [
+      ...player.units(UnitType.Mine),
+      ...player.units(UnitType.Farm),
+    ];
     const { borderSpacing, structureSpacing } = this.spacingConstants();
     const stationRange = game.config().trainStationMaxRange();
     const stationRangeSquared = stationRange * stationRange;
@@ -314,11 +278,12 @@ export class NationStructurePlacement {
     // Own structures — weighted by "self" trade gold.
     const selfWeight =
       Number(game.config().trainGold("self", 0, player)) / maxTradeGold;
-    for (const unit of player.units(
+    for (const unit of player.units([
       UnitType.City,
       UnitType.Port,
-      UnitType.Factory,
-    )) {
+      UnitType.Mine,
+      UnitType.Farm,
+    ])) {
       if (unitToCluster.has(unit)) {
         result.push({
           tile: unit.tile(),
@@ -340,11 +305,12 @@ export class NationStructurePlacement {
           : "other";
       const weight =
         Number(game.config().trainGold(relType, 0, player)) / maxTradeGold;
-      for (const unit of neighbor.units(
+      for (const unit of neighbor.units([
         UnitType.City,
         UnitType.Port,
-        UnitType.Factory,
-      )) {
+        UnitType.Mine,
+        UnitType.Farm,
+      ])) {
         if (unitToCluster.has(unit)) {
           result.push({
             tile: unit.tile(),
@@ -413,7 +379,10 @@ export class NationStructurePlacement {
 
     // Cross-type spacing: prefer to be away from factories.
     const factoryTiles: Set<TileRef> = new Set(
-      player.units(UnitType.Factory).map((u) => u.tile()),
+      [
+        ...player.units(UnitType.Mine),
+        ...player.units(UnitType.Farm),
+      ].map((u) => u.tile()),
     );
 
     return (tile) => {
@@ -455,111 +424,12 @@ export class NationStructurePlacement {
     };
   }
 
-  /**
-   * Value function for SAM launchers.
-   * Prefers elevation, distance from border, spacing, and proximity to protectable structures.
-   * On harder difficulties, weights by structure level and considers existing SAM coverage.
-   */
-  private samLauncherValue(): (tile: TileRef) => number {
-    const game = this.game;
-    const player = this.player;
-    const borderTiles = player.borderTiles();
-    const otherUnits = player.units(UnitType.SAMLauncher);
-    const { borderSpacing, structureSpacing } = this.spacingConstants();
-
-    const { difficulty } = game.config().gameConfig();
-    const weightByLevel =
-      difficulty === Difficulty.Hard || difficulty === Difficulty.Impossible;
-
-    const protectEntries: { tile: TileRef; weight: number }[] = [];
-    for (const unit of player.units()) {
-      switch (unit.type()) {
-        case UnitType.City:
-        case UnitType.Factory:
-        case UnitType.MissileSilo:
-        case UnitType.Port:
-          protectEntries.push({
-            tile: unit.tile(),
-            weight: weightByLevel ? unit.level() : 1,
-          });
-      }
-    }
-    const range = game.config().defaultSamRange();
-    const rangeSquared = range * range;
-
-    const useCoverageWeighting =
-      difficulty !== Difficulty.Easy && this.random.nextInt(0, 100) < 25;
-
-    // Pre-compute existing SAM coverage for each protectable structure
-    let structureCoverage: Map<TileRef, number> | null = null;
-    if (useCoverageWeighting) {
-      structureCoverage = new Map<TileRef, number>();
-      const existingSams = player.units(UnitType.SAMLauncher);
-      for (const entry of protectEntries) {
-        let coverageScore = 0;
-        for (const sam of existingSams) {
-          const samRange = game.config().samRange(sam.level());
-          const dist = game.euclideanDistSquared(entry.tile, sam.tile());
-          if (dist <= samRange * samRange) {
-            coverageScore += sam.level();
-          }
-        }
-        structureCoverage.set(entry.tile, coverageScore);
-      }
-    }
-
-    return (tile) => {
-      let w = 0;
-
-      // Prefer higher elevations
-      w += game.magnitude(tile);
-
-      // Prefer to be away from the border
-      const closestBorderDist = nearestTileDistCapped(
-        game,
-        borderTiles,
-        tile,
-        borderSpacing,
-      );
-      // Infinity here also means "farther than borderSpacing", which still
-      // earns the clamped term; only an empty border set contributes nothing.
-      if (borderTiles.size > 0) {
-        w += Math.min(closestBorderDist, borderSpacing);
-      }
-
-      // Prefer to be away from other structures of the same type
-      const otherTiles: Set<TileRef> = new Set(otherUnits.map((u) => u.tile()));
-      otherTiles.delete(tile);
-      const d = nearestTileDist(game, otherTiles, tile);
-      if (d !== Infinity) w += Math.min(d, structureSpacing);
-
-      // Prefer to be in range of other structures (skip on easy difficulty)
-      if (difficulty !== Difficulty.Easy) {
-        for (const entry of protectEntries) {
-          const distanceSquared = game.euclideanDistSquared(tile, entry.tile);
-          if (distanceSquared > rangeSquared) continue;
-          if (useCoverageWeighting && structureCoverage !== null) {
-            const coverage = structureCoverage.get(entry.tile) ?? 0;
-            const coverageWeight = 1 / (1 + coverage);
-            w += structureSpacing * entry.weight * coverageWeight;
-          } else {
-            w += structureSpacing * entry.weight;
-          }
-        }
-      }
-
-      return w;
-    };
-  }
-
-  /** Shared spacing constants derived from atom bomb range. */
+  /** Spacing used when placing cities, ports, and factories. */
   private spacingConstants(): {
     borderSpacing: number;
     structureSpacing: number;
   } {
-    const borderSpacing = this.game
-      .config()
-      .nukeMagnitudes(UnitType.AtomBomb).outer;
+    const borderSpacing = 30;
     return { borderSpacing, structureSpacing: borderSpacing * 2 };
   }
 }

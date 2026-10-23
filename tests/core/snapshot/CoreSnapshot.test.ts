@@ -39,7 +39,6 @@ async function builtGame(): Promise<Game> {
   const g = game as GameImpl;
   g.createAllianceRequest(a, b)?.accept();
   g.createAllianceRequest(b, game.player("bot"));
-  game.setFallout(game.ref(40, 40), true);
   game.addExecution(new WinCheckExecution());
   for (let i = 0; i < 5; i++) game.executeNextTick();
   port.delete();

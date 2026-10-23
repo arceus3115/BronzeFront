@@ -9,7 +9,6 @@ import {
 } from "@openfront/engine-api/game/GameTypes";
 import type { SnapshotHeader } from "@openfront/engine-api/game/SnapshotHeader";
 import { TeamCountConfig } from "@openfront/engine-api/Schemas";
-import { DoomsdayClockSpeed } from "@openfront/engine-lib/game/DoomsdayClock";
 import { UserMeResponse } from "@openfront/shared/ApiSchemas";
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { generateID } from "@openfront/shared/SharedUtil";
@@ -130,9 +129,6 @@ const DEFAULT_OPTIONS = {
   disabledUnits: [] as UnitType[],
   customAlliances: false,
   customAllianceMinutes: undefined as number | undefined,
-  waterNukes: false,
-  doomsdayClock: false,
-  doomsdayClockSpeed: "normal" as DoomsdayClockSpeed,
   overtime: false,
   overtimeStartMinutes: undefined as number | undefined,
 } as const;
@@ -219,10 +215,6 @@ export class SinglePlayerModal extends BaseModal {
   @state() private customAlliances: boolean = DEFAULT_OPTIONS.customAlliances;
   @state() private customAllianceMinutes: number | undefined =
     DEFAULT_OPTIONS.customAllianceMinutes;
-  @state() private waterNukes: boolean = DEFAULT_OPTIONS.waterNukes;
-  @state() private doomsdayClock: boolean = DEFAULT_OPTIONS.doomsdayClock;
-  @state() private doomsdayClockSpeed: DoomsdayClockSpeed =
-    DEFAULT_OPTIONS.doomsdayClockSpeed;
   @state() private overtime: boolean = DEFAULT_OPTIONS.overtime;
   @state() private overtimeStartMinutes: number | undefined =
     DEFAULT_OPTIONS.overtimeStartMinutes;
@@ -571,15 +563,6 @@ export class SinglePlayerModal extends BaseModal {
                     labelKey: "game_settings.compact_map",
                     checked: this.compactMap,
                   },
-                  {
-                    labelKey: "game_settings.water_nukes",
-                    checked: this.waterNukes,
-                  },
-                  {
-                    labelKey: "game_settings.doomsday_clock",
-                    checked: this.doomsdayClock,
-                    doomsdayClockSpeed: this.doomsdayClockSpeed,
-                  },
                 ],
                 inputCards,
               },
@@ -591,8 +574,6 @@ export class SinglePlayerModal extends BaseModal {
             @map-selected=${this.handleConfigMapSelected}
             @random-map-selected=${this.handleConfigRandomMapSelected}
             @difficulty-selected=${this.handleConfigDifficultySelected}
-            @doomsday-clock-speed-selected=${this
-              .handleConfigDoomsdayClockSpeedSelected}
             @game-mode-selected=${this.handleConfigGameModeSelected}
             @team-count-selected=${this.handleConfigTeamCountSelected}
             @bots-changed=${this.handleBotsChange}
@@ -643,11 +624,6 @@ export class SinglePlayerModal extends BaseModal {
       this.startingGold !== DEFAULT_OPTIONS.startingGold ||
       this.customAlliances !== DEFAULT_OPTIONS.customAlliances ||
       this.customAllianceMinutes !== DEFAULT_OPTIONS.customAllianceMinutes ||
-      this.waterNukes !== DEFAULT_OPTIONS.waterNukes ||
-      this.doomsdayClock !== DEFAULT_OPTIONS.doomsdayClock ||
-      // Pace only matters when the mode is on (startGame drops it when off).
-      (this.doomsdayClock &&
-        this.doomsdayClockSpeed !== DEFAULT_OPTIONS.doomsdayClockSpeed) ||
       this.overtime !== DEFAULT_OPTIONS.overtime ||
       this.disabledUnits.length > 0
     );
@@ -720,9 +696,6 @@ export class SinglePlayerModal extends BaseModal {
     this.startingGoldValue = DEFAULT_OPTIONS.startingGoldValue;
     this.customAlliances = DEFAULT_OPTIONS.customAlliances;
     this.customAllianceMinutes = DEFAULT_OPTIONS.customAllianceMinutes;
-    this.waterNukes = DEFAULT_OPTIONS.waterNukes;
-    this.doomsdayClock = DEFAULT_OPTIONS.doomsdayClock;
-    this.doomsdayClockSpeed = DEFAULT_OPTIONS.doomsdayClockSpeed;
     this.overtime = DEFAULT_OPTIONS.overtime;
     this.overtimeStartMinutes = DEFAULT_OPTIONS.overtimeStartMinutes;
   }
@@ -772,11 +745,6 @@ export class SinglePlayerModal extends BaseModal {
     this.handleDifficultySelection(customEvent.detail.difficulty);
   };
 
-  private handleConfigDoomsdayClockSpeedSelected = (e: Event) => {
-    const customEvent = e as CustomEvent<{ speed: DoomsdayClockSpeed }>;
-    this.doomsdayClockSpeed = customEvent.detail.speed;
-  };
-
   private handleConfigGameModeSelected = (e: Event) => {
     const customEvent = e as CustomEvent<{ mode: GameMode }>;
     this.handleGameModeSelection(customEvent.detail.mode);
@@ -819,12 +787,6 @@ export class SinglePlayerModal extends BaseModal {
         break;
       case "game_settings.compact_map":
         this.handleCompactMapChange(checked);
-        break;
-      case "game_settings.water_nukes":
-        this.waterNukes = checked;
-        break;
-      case "game_settings.doomsday_clock":
-        this.doomsdayClock = checked;
         break;
       default:
         break;
@@ -1151,15 +1113,6 @@ export class SinglePlayerModal extends BaseModal {
               : {}),
             ...(this.customAlliances
               ? { customAllianceDuration: this.customAllianceMinutes ?? 0 }
-              : {}),
-            ...(this.waterNukes ? { waterNukes: true } : {}),
-            ...(this.doomsdayClock
-              ? {
-                  doomsdayClock: {
-                    enabled: true,
-                    speed: this.doomsdayClockSpeed,
-                  },
-                }
               : {}),
             ...(this.overtime
               ? {

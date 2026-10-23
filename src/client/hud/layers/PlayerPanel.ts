@@ -6,9 +6,14 @@ import {
   PlayerProfile,
   PlayerType,
   Relation,
+  UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { Emoji, flattenedEmojiTable } from "@openfront/engine-api/Schemas";
 import { renderNumber, renderTroops } from "@openfront/engine-lib/Format";
+import {
+  BRONZE_WEAPONS_COST,
+  MARKETS_COST,
+} from "@openfront/engine-lib/game/BronzeRules";
 import type { UserMeResponse } from "@openfront/shared/ApiSchemas";
 import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
@@ -25,11 +30,7 @@ import "../../components/LevelBadge";
 import { actionButton } from "../../components/ui/ActionButton";
 import "../../components/ui/Divider";
 import { Controller } from "../../Controller";
-import {
-  CloseViewEvent,
-  MouseUpEvent,
-  SwapRocketDirectionEvent,
-} from "../../InputHandler";
+import { CloseViewEvent, MouseUpEvent } from "../../InputHandler";
 import { lobbyLevelBadge } from "../../LobbyRosterLevels";
 import {
   PlayerReportedEvent,
@@ -38,6 +39,8 @@ import {
   SendEmbargoAllIntentEvent,
   SendEmbargoIntentEvent,
   SendEmojiIntentEvent,
+  SendExchangeIntentEvent,
+  SendResearchIntentEvent,
   SendTargetPlayerIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
@@ -127,10 +130,6 @@ export class PlayerPanel extends LitElement implements Controller {
       if (this.isVisible) {
         this.hide();
       }
-    });
-    eventBus.on(SwapRocketDirectionEvent, (event) => {
-      this.uiState.rocketDirectionUp = event.rocketDirectionUp;
-      this.requestUpdate();
     });
     eventBus.on(PlayerReportedEvent, (event) => {
       this.reportedClientIDs.add(event.reported);
@@ -422,12 +421,6 @@ export class PlayerPanel extends LitElement implements Controller {
     );
   }
 
-  private handleToggleRocketDirection(e: Event) {
-    e.stopPropagation();
-    const next = !this.uiState.rocketDirectionUp;
-    this.eventBus.emit(new SwapRocketDirectionEvent(next));
-  }
-
   private identityChipProps(type: PlayerType) {
     switch (type) {
       case PlayerType.Nation:
@@ -676,7 +669,7 @@ export class PlayerPanel extends LitElement implements Controller {
     `;
   }
 
-  private renderResources(other: PlayerView) {
+  private renderResources(other: PlayerView, viewer: PlayerView | null) {
     return html`
       <div class="mb-1 flex justify-between gap-2">
         <div
@@ -693,6 +686,32 @@ export class PlayerPanel extends LitElement implements Controller {
         </div>
 
         <div
+          class="inline-flex items-center gap-1.5 rounded-lg bg-white/4 px-3 py-1.5 shrink-0
+                    text-white w-35"
+        >
+          <span class="mr-0.5">🌾</span>
+          <span translate="no" class="tabular-nums w-[5ch] font-semibold">
+            ${renderNumber(other.food() || 0)}
+          </span>
+          <span class="text-zinc-200 whitespace-nowrap">
+            ${translateText("player_panel.food")}</span
+          >
+        </div>
+
+        <div
+          class="inline-flex items-center gap-1.5 rounded-lg bg-white/4 px-3 py-1.5 shrink-0
+                    text-white w-35"
+        >
+          <span class="mr-0.5">🔬</span>
+          <span translate="no" class="tabular-nums w-[5ch] font-semibold">
+            ${renderNumber(other.science() || 0)}
+          </span>
+          <span class="text-zinc-200 whitespace-nowrap">
+            ${translateText("player_panel.science")}</span
+          >
+        </div>
+
+        <div
           class="inline-flex items-center gap-1.5 rounded-lg bg-white/4 px-3 py-1.5
                     text-white w-35 shrink-0"
         >
@@ -705,28 +724,55 @@ export class PlayerPanel extends LitElement implements Controller {
           >
         </div>
       </div>
+      ${viewer !== null && viewer.id() === other.id()
+        ? this.renderTechnology(viewer)
+        : ""}
     `;
   }
 
-  private renderRocketDirectionToggle() {
+  private renderTechnology(player: PlayerView) {
+    const science = player.science();
+    const hasMine = player.units(UnitType.Mine).length > 0;
     return html`
-      <ui-divider></ui-divider>
-      <button
-        class="flex w-full items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-left text-white hover:bg-white/8 active:scale-[0.995] transition"
-        @click=${(e: Event) => this.handleToggleRocketDirection(e)}
-      >
-        <div class="flex flex-col">
-          <span class="text-sm font-semibold tracking-tight">
-            ${translateText("player_panel.flip_rocket_trajectory")}
-          </span>
-          <span class="text-xs text-zinc-300" translate="no">
-            ${this.uiState.rocketDirectionUp
-              ? translateText("player_panel.arc_up")
-              : translateText("player_panel.arc_down")}
-          </span>
-        </div>
-        <span class="text-lg" aria-hidden="true">🔀</span>
-      </button>
+      <div class="mb-1 flex flex-wrap gap-2">
+        ${player.hasBronzeWeapons()
+          ? ""
+          : html`<button
+              class="rounded-lg border border-white/10 px-2 py-1"
+              ?disabled=${science < BRONZE_WEAPONS_COST}
+              @click=${() =>
+                this.eventBus.emit(
+                  new SendResearchIntentEvent("bronze_weapons"),
+                )}
+            >
+              ${translateText("player_panel.bronze_weapons")}
+            </button>`}
+        ${player.hasMarkets()
+          ? html`<button
+              class="rounded-lg border border-white/10 px-2 py-1"
+              @click=${() =>
+                this.eventBus.emit(
+                  new SendExchangeIntentEvent(
+                    hasMine ? "money_to_food" : "food_to_money",
+                    3,
+                  ),
+                )}
+            >
+              ${translateText(
+                hasMine
+                  ? "player_panel.exchange_money"
+                  : "player_panel.exchange_food",
+              )}
+            </button>`
+          : html`<button
+              class="rounded-lg border border-white/10 px-2 py-1"
+              ?disabled=${science < MARKETS_COST}
+              @click=${() =>
+                this.eventBus.emit(new SendResearchIntentEvent("markets"))}
+            >
+              ${translateText("player_panel.markets")}
+            </button>`}
+      </div>
     `;
   }
 
@@ -1166,12 +1212,7 @@ export class PlayerPanel extends LitElement implements Controller {
                     <ui-divider></ui-divider>
 
                     <!-- Resources -->
-                    ${this.renderResources(other)}
-
-                    <!-- Rocket direction toggle -->
-                    ${other === viewer && !isSpectator
-                      ? this.renderRocketDirectionToggle()
-                      : ""}
+                    ${this.renderResources(other, viewer)}
 
                     <ui-divider></ui-divider>
 

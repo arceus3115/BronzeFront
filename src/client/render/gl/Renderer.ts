@@ -20,8 +20,6 @@ import type {
   DeadUnitFx,
   GhostPreviewData,
   NameEntry,
-  NukeTelegraphData,
-  NukeTrajectoryData,
   PlayerState,
   PlayerStatic,
   PlayerStatusData,
@@ -45,12 +43,9 @@ import { MapLayerPass } from "./passes/MapLayerPass";
 import { MoveIndicatorPass } from "./passes/MoveIndicatorPass";
 import { NamePass } from "./passes/name-pass";
 import { NightCompositePass } from "./passes/NightCompositePass";
-import { NukeTelegraphPass } from "./passes/NukeTelegraphPass";
-import { NukeTrajectoryPass } from "./passes/NukeTrajectoryPass";
 import { PointLightPass } from "./passes/PointLightPass";
 import { RailroadPass } from "./passes/RailroadPass";
 import { RangeCirclePass } from "./passes/RangeCirclePass";
-import { SAMRadiusPass } from "./passes/SamRadiusPass";
 import { SelectionBoxPass } from "./passes/SelectionBoxPass";
 import { SkinAtlasArray } from "./passes/SkinAtlasArray";
 import { SmallPlayerGlowPass } from "./passes/SmallPlayerGlowPass";
@@ -86,22 +81,6 @@ import {
 } from "./utils/GpuResources";
 import { HeatManager } from "./utils/HeatManager";
 
-/** Ghost types that trigger SAM radius overlay (matches upstream SAMRadiusLayer). */
-const SAM_RADIUS_GHOST_TYPES = new Set([
-  "Missile Silo",
-  "SAM Launcher",
-  "City",
-  "Atom Bomb",
-  "Hydrogen Bomb",
-]);
-
-/** Subset for build-button hover — excludes City/Silo (SAM radii irrelevant). */
-const SAM_RADIUS_HIGHLIGHT_TYPES = new Set([
-  "SAM Launcher",
-  "Atom Bomb",
-  "Hydrogen Bomb",
-]);
-
 const GRID_VIEW_KEY = "renderer:grid_view_enabled";
 
 export class GPURenderer {
@@ -135,15 +114,12 @@ export class GPURenderer {
   private namePass: NamePass;
   private fxPass: FxPass;
   private rangeCirclePass: RangeCirclePass;
-  private samRadiusPass: SAMRadiusPass;
   private crosshairPass: CrosshairPass;
   private railroadPass: RailroadPass;
   private barPass: BarPass;
   private worldTextPass: WorldTextPass;
   private selectionBoxPass: SelectionBoxPass;
   private moveIndicatorPass: MoveIndicatorPass;
-  private nukeTrajectoryPass: NukeTrajectoryPass;
-  private nukeTelegraphPass: NukeTelegraphPass;
   private heatManager: HeatManager;
   private affiliationPalette: AffiliationPalette;
   private coordinateGridPass: CoordinateGridPass;
@@ -202,8 +178,6 @@ export class GPURenderer {
   private gridView = false;
 
   // SAM radius visibility tracking (show if either source is true)
-  private samGhostVisible = false;
-  private samHighlightVisible = false;
 
   // Warship selection — supports any number of selections.
   private selectedUnitIds: number[] = [];
@@ -555,10 +529,6 @@ export class GPURenderer {
     // --- Range circle (ghost preview radius) ---
     this.rangeCirclePass = new RangeCirclePass(gl);
 
-    // --- SAM radius overlay (dashed green circles during build mode) ---
-    this.samRadiusPass = new SAMRadiusPass(gl, mapW, this.settings);
-    this.samRadiusPass.setPaletteData(paletteData);
-
     // --- Crosshair (warship placement) ---
     this.crosshairPass = new CrosshairPass(gl);
 
@@ -592,8 +562,6 @@ export class GPURenderer {
     this.worldTextPass.setMapWidth(this.mapW);
     this.selectionBoxPass = new SelectionBoxPass(gl);
     this.moveIndicatorPass = new MoveIndicatorPass(gl, this.settings);
-    this.nukeTrajectoryPass = new NukeTrajectoryPass(gl, this.settings);
-    this.nukeTelegraphPass = new NukeTelegraphPass(gl, this.settings);
 
     // --- Scene capture target (for night composite) ---
     const sceneTex = gl.createTexture()!;
@@ -737,8 +705,6 @@ export class GPURenderer {
       gl.FLOAT,
       this.paletteData,
     );
-    // SAM radius pass stores its own copy
-    this.samRadiusPass.setPaletteData(this.paletteData);
     // Name pass caches per-player colors and bakes them into slot rows
     this.namePass.refreshPlayerColors(this.paletteData);
   }
@@ -909,7 +875,6 @@ export class GPURenderer {
     this.frameTick++;
     this.unitPass.setFrameTick(this.frameTick);
     this.unitPass.updateUnits(units, gameTick);
-    this.samRadiusPass.setTick(gameTick);
     this.barPass.updateBars(units, this.lastStructures, gameTick);
     this.pointLightPass.updateLights(units);
     this.heatManager.decayHeat();
@@ -923,7 +888,7 @@ export class GPURenderer {
   ): void {
     this.namePass.updateNames(names, players, snap, statusData);
 
-    // Extract local player's allies + teammates for SAM radius coloring
+    // Allies and teammates tint trade ships in alt view.
     if (this.localPlayerID > 0) {
       const localPS = players.get(this.localPlayerID);
       const friendly = new Set(localPS?.allies ?? []);
@@ -933,7 +898,6 @@ export class GPURenderer {
           if (team === myTeam && sid !== this.localPlayerID) friendly.add(sid);
         }
       }
-      this.samRadiusPass.setAllies(friendly);
       this.unitPass.setAllies(friendly);
     }
   }
@@ -952,7 +916,6 @@ export class GPURenderer {
     this.lastStructures = units;
     this.structurePass.updateStructures(units);
     this.structureLevelPass.updateStructures(units);
-    this.samRadiusPass.updateStructures(units);
     this.unitPass.setStructures(units);
     const posts: { x: number; y: number; ownerID: number }[] = [];
     const w = this.mapW;
@@ -1086,19 +1049,6 @@ export class GPURenderer {
           }
         : null,
     );
-    this.samGhostVisible =
-      data !== null && SAM_RADIUS_GHOST_TYPES.has(data.ghostType);
-    this.samRadiusPass.setVisible(
-      this.samGhostVisible || this.samHighlightVisible,
-    );
-  }
-
-  updateNukeTrajectory(data: NukeTrajectoryData | null): void {
-    this.nukeTrajectoryPass.update(data);
-  }
-
-  updateNukeTelegraphs(data: NukeTelegraphData[]): void {
-    this.nukeTelegraphPass.update(data);
   }
 
   updateSpawnOverlay(inSpawnPhase: boolean, centers: SpawnCenter[]): void {
@@ -1127,18 +1077,11 @@ export class GPURenderer {
   setHighlightStructureTypes(unitTypes: string[] | null): void {
     this.structurePass.setHighlightTypes(unitTypes);
     this.structureLevelPass.setHighlightTypes(unitTypes);
-    this.samHighlightVisible =
-      unitTypes !== null &&
-      unitTypes.some((t) => SAM_RADIUS_HIGHLIGHT_TYPES.has(t));
-    this.samRadiusPass.setVisible(
-      this.samGhostVisible || this.samHighlightVisible,
-    );
   }
 
   setLocalPlayerID(id: number): void {
     if (id === this.localPlayerID) return;
     this.localPlayerID = id;
-    this.samRadiusPass.setLocalPlayer(id);
     this.structurePass.setLocalPlayer(id);
     this.affiliationPalette.setLocalPlayer(id);
     this.unitPass.setLocalPlayer(id);
@@ -1147,10 +1090,6 @@ export class GPURenderer {
 
   setLocalRailColor(r: number, g: number, b: number): void {
     this.railroadPass.setLocalRailColor(r, g, b);
-  }
-
-  setSAMAllianceClusters(clusters: Map<number, number>): void {
-    this.samRadiusPass.setAllianceClusters(clusters);
   }
 
   setAltView(active: boolean): void {
@@ -1367,9 +1306,7 @@ export class GPURenderer {
     if (pe.railroad) this.railroadPass.draw(cam, zoom);
     if (pe.unit) this.unitPass.drawGround(cam);
     if (pe.falloutBloom) this.bloomPass.draw(cam, this.frameTick);
-    this.samRadiusPass.draw(cam);
     this.rangeCirclePass.draw(cam);
-    this.nukeTrajectoryPass.draw(cam);
     this.crosshairPass.draw(cam);
     if (pe.structure) this.structurePass.draw(cam, zoom);
     if (pe.structure) this.structureLevelPass.draw(cam, zoom);
@@ -1379,7 +1316,6 @@ export class GPURenderer {
     this.updateSelectionBox();
     this.selectionBoxPass.draw(cam, this.frameTick);
     this.moveIndicatorPass.draw(cam, zoom);
-    this.nukeTelegraphPass.draw(cam);
     if (pe.trail) this.trailPass.draw(cam);
     // Spiral vortexes sit above the plain trails, below the missiles that
     // trail them. Skipped in alt view — the strategic overlay stays effects-free.
@@ -1438,7 +1374,7 @@ export class GPURenderer {
         this.mapW,
         this.mapH,
         placement,
-        layer.nukeable ?? false,
+        false,
       );
       this.mapLayerPasses.set(layer.id, pass);
     }
@@ -1506,7 +1442,6 @@ export class GPURenderer {
     this.smallPlayerGlowPass.dispose();
     this.railroadPass.dispose();
     this.rangeCirclePass.dispose();
-    this.samRadiusPass.dispose();
     this.crosshairPass.dispose();
     this.structurePass.dispose();
     this.structureLevelPass.dispose();
@@ -1516,8 +1451,6 @@ export class GPURenderer {
     this.worldTextPass.dispose();
     this.selectionBoxPass.dispose();
     this.moveIndicatorPass.dispose();
-    this.nukeTrajectoryPass.dispose();
-    this.nukeTelegraphPass.dispose();
     this.barPass.dispose();
     disposeGPUResources(this.gl, this.res);
     this.gl.deleteTexture(this.paletteTex);

@@ -78,7 +78,7 @@ test("world map nations: trade ships and trains round-trip", async () => {
     rec.truth.flatMap((t) => [...t.units.values()].map((u) => u.unitType)),
   );
   expect(types).toContain(UnitType.TradeShip);
-  expect(types).toContain(UnitType.Train);
+  expect(types).toContain(UnitType.Depot);
   expect(h.railroadEvents.length).toBeGreaterThan(0);
 
   expectReplayMatches(rec);

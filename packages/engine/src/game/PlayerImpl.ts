@@ -1,4 +1,6 @@
 import { TileRef } from "@openfront/engine-api/game/GameMap";
+import { foodWeight, mineWeight } from "@openfront/engine-lib/game/Biome";
+import { cityUpgradeFoodCost } from "@openfront/engine-lib/game/BronzeRules";
 import {
   AllianceInfo,
   AllPlayers,
@@ -6,8 +8,6 @@ import {
   Cell,
   ColoredTeams,
   EmojiMessage,
-  GameMode,
-  GameType,
   Gold,
   MAX_UPGRADE_AMOUNT,
   PlayerBuildable,
@@ -56,6 +56,7 @@ import {
 } from "@openfront/engine-lib/Util";
 import { z } from "zod";
 import {
+  migrateUnitTypeName,
   newPlayerInfo,
   playerInfoData,
   PlayerInfoSchema,
@@ -88,9 +89,6 @@ import {
   canBuildTransportShip,
 } from "./TransportShipUtils";
 import { UnitImpl } from "./UnitImpl";
-
-// Rot re-stamps every second, so a little slack keeps the cue from strobing.
-const DECAY_CUE_GRACE_TICKS = 30;
 
 interface Target {
   tick: Tick;
@@ -149,11 +147,15 @@ export class PlayerImpl implements Player {
   private _piracyGold: bigint = 0n;
   /** Cumulative gold received from all sources (incremented in addGold). */
   private _goldEarned: bigint = 0n;
+  /** Food delivered by depots that left a farm. */
+  private _food: bigint = 0n;
+  private _science: bigint = 0n;
+  private _bronzeWeapons = false;
+  private _markets = false;
+  private _foodYield = 0;
+  private _mineYield = 0;
 
   markedTraitorTick = -1;
-  markedDoomsdayClockTick = -1;
-  /** Tick territory rot last took land from this player (-1 = never). */
-  private rottedAtTick = -1;
   private _betrayalCount: number = 0;
 
   private embargoes = new Map<PlayerID, Embargo>();
@@ -216,6 +218,8 @@ export class PlayerImpl implements Player {
   ) {
     this._troops = toInt(startTroops);
     this._gold = mg.config().startingGold(playerInfo);
+    this._food = mg.config().startingFood(playerInfo);
+    this._science = mg.config().startingScience(playerInfo);
     this._pseudo_random = new PseudoRandom(simpleHash(this.playerInfo.id));
   }
 
@@ -393,6 +397,10 @@ export class PlayerImpl implements Player {
       deathPosition: deathStats?.deathPosition ?? null,
       tilesOwned: this.numTilesOwned(),
       gold: this._gold,
+      food: this._food,
+      science: this._science,
+      bronzeWeapons: this._bronzeWeapons,
+      markets: this._markets,
       tradeGold: this._tradeGold,
       trainGold: this._trainGold,
       piracyGold: this._piracyGold,
@@ -402,9 +410,6 @@ export class PlayerImpl implements Player {
       embargoes: embargoes,
       isTraitor: this.isTraitor(),
       traitorRemainingTicks: this.getTraitorRemainingTicks(),
-      inDoomsdayClock: this.inDoomsdayClock(),
-      isDecaying: this.isDecaying(),
-      markedDoomsdayClockTick: this.markedDoomsdayClockTick,
       targets: targets,
       outgoingEmojis: outgoingEmojis,
       outgoingAttacks: outgoingAttacks,
@@ -606,10 +611,10 @@ export class PlayerImpl implements Player {
   nearby(): (Player | TerraNullius)[] {
     // Nation AI asks several times per tick (maybeAttack, attackBestTarget,
     // attackBots, ...) with no map change in between; the answer depends on
-    // tile ownership and fallout (covered by territoryVersion) and on the
-    // land/water/shoreline terrain. Live nuke floods mutate the latter through
-    // WaterManager on the raw GameMap — bypassing GameImpl's bump — so the
-    // map's waterVersion() is a second key, which every conversion advances.
+    // tile ownership (covered by territoryVersion) and on the
+    // land/water/shoreline terrain. WaterManager mutates the latter on the
+    // raw GameMap — bypassing GameImpl's bump — so the map's waterVersion()
+    // is a second key, which every conversion advances.
     const version = this.mg.territoryVersion();
     const waterVersion = this.mg.map().waterVersion();
     if (
@@ -630,9 +635,6 @@ export class PlayerImpl implements Player {
     const smallID = this.smallID();
     const visit = (neighbor: TileRef) => {
       if (map.isLand(neighbor) && !map.isImpassable(neighbor)) {
-        if (!map.hasOwner(neighbor) && map.hasFallout(neighbor)) {
-          return;
-        }
         const owner = map.ownerID(neighbor);
         if (owner !== smallID) {
           ns.add(
@@ -682,7 +684,6 @@ export class PlayerImpl implements Player {
         const tile = map.ref(nx, ny);
         if (!map.isLand(tile)) continue;
         if (map.isImpassable(tile)) continue;
-        if (!map.hasOwner(tile) && map.hasFallout(tile)) continue;
         const owner = map.ownerID(tile);
         if (owner !== this.smallID()) {
           ns.add(
@@ -885,44 +886,6 @@ export class PlayerImpl implements Player {
 
     // Record stats (only for real Humans)
     this.mg.stats().betray(this);
-  }
-
-  // A dead player is never "in doomsday clock": nothing clears the mark on death
-  // (the execution only processes alive contenders), so gate on isAlive() to
-  // avoid a stuck skull/panel and per-tick update churn for eliminated players.
-  inDoomsdayClock(): boolean {
-    return this.isAlive() && this.markedDoomsdayClockTick >= 0;
-  }
-
-  // Ticks spent continuously below the doomsday-clock bar (0 when not marked or dead).
-  doomsdayClockTicks(): number {
-    return this.inDoomsdayClock()
-      ? this.mg.ticks() - this.markedDoomsdayClockTick
-      : 0;
-  }
-
-  enterDoomsdayClock(): void {
-    if (this.markedDoomsdayClockTick < 0) {
-      this.markedDoomsdayClockTick = this.mg.ticks();
-    }
-  }
-
-  clearDoomsdayClock(): void {
-    this.markedDoomsdayClockTick = -1;
-    this.rottedAtTick = -1;
-  }
-
-  markRotted(): void {
-    this.rottedAtTick = this.mg.ticks();
-  }
-
-  // Territory actively rotting. Stamped by the execution rather than derived from
-  // troops vs the floor: that is a knife-edge equality (the drain lands exactly ON
-  // the floor) and the floor moves as rot shrinks the cap, so a client-side copy
-  // flickers.
-  isDecaying(): boolean {
-    if (!this.inDoomsdayClock() || this.rottedAtTick < 0) return false;
-    return this.mg.ticks() - this.rottedAtTick <= DECAY_CUE_GRACE_TICKS;
   }
 
   betrayals(): number {
@@ -1360,6 +1323,65 @@ export class PlayerImpl implements Player {
     }
   }
 
+  food(): Gold {
+    return this._food;
+  }
+
+  addFood(toAdd: Gold): void {
+    if (toAdd === 0n) return;
+    this._food += toAdd;
+  }
+
+  science(): Gold {
+    return this._science;
+  }
+
+  addScience(toAdd: Gold): void {
+    if (toAdd === 0n) return;
+    this._science += toAdd;
+  }
+
+  removeScience(toRemove: Gold): Gold {
+    if (toRemove <= 0n) return 0n;
+    if (this.mg.config().infiniteScience()) return toRemove;
+    const actual = minInt(this._science, toRemove);
+    this._science -= actual;
+    return actual;
+  }
+
+  hasBronzeWeapons(): boolean {
+    return this._bronzeWeapons;
+  }
+
+  hasMarkets(): boolean {
+    return this._markets;
+  }
+
+  unlockBronzeWeapons(): void {
+    this._bronzeWeapons = true;
+  }
+
+  unlockMarkets(): void {
+    this._markets = true;
+  }
+
+  foodYield(): number {
+    return this._foodYield;
+  }
+
+  mineYield(): number {
+    return this._mineYield;
+  }
+
+  addYield(food: number, mine: number): void {
+    this._foodYield += food;
+    this._mineYield += mine;
+  }
+
+  strengthMultiplier(): number {
+    return this._bronzeWeapons ? 4 / 3 : 1;
+  }
+
   removeGold(toRemove: Gold): Gold {
     if (toRemove <= 0n) {
       return 0n;
@@ -1464,7 +1486,7 @@ export class PlayerImpl implements Player {
     if (this._gold < cost) {
       return false;
     }
-    if (unitType !== UnitType.MIRVWarhead && !this.isAlive()) {
+    if (!this.isAlive()) {
       return false;
     }
     return true;
@@ -1491,6 +1513,12 @@ export class PlayerImpl implements Player {
     if (!this.canUpgradeUnitType(unit.type())) {
       return false;
     }
+    if (unit.type() === UnitType.City) {
+      if (!this.isUnitValidToUpgrade(unit)) return false;
+      const base = this.mg.unitInfo(UnitType.City).cost(this.mg, this);
+      const cost = cityUpgradeFoodCost(base, this._food);
+      return this.mg.config().infiniteFood() || this._food >= cost;
+    }
     if (!this.canBuildUnitType(unit.type())) {
       return false;
     }
@@ -1501,6 +1529,14 @@ export class PlayerImpl implements Player {
   }
 
   upgradeUnit(unit: Unit) {
+    if (unit.type() === UnitType.City) {
+      const base = this.mg.unitInfo(UnitType.City).cost(this.mg, this);
+      const cost = cityUpgradeFoodCost(base, this._food);
+      if (!this.mg.config().infiniteFood()) this._food -= cost;
+      unit.increaseLevel();
+      this.recordUnitConstructed(unit.type());
+      return;
+    }
     const cost = this.mg.unitInfo(unit.type()).cost(this.mg, this);
     this.removeGold(cost);
     unit.increaseLevel();
@@ -1595,90 +1631,25 @@ export class PlayerImpl implements Player {
     validTiles: TileRef[] | null,
   ): TileRef | false {
     switch (unitType) {
-      case UnitType.MIRV:
-        if (!this.mg.hasOwner(targetTile)) {
-          return false;
-        }
-        return this.nukeSpawn(targetTile, unitType);
-      case UnitType.AtomBomb:
-      case UnitType.HydrogenBomb:
-        return this.nukeSpawn(targetTile, unitType);
-      case UnitType.MIRVWarhead:
-        return targetTile;
       case UnitType.Port:
         return this.portSpawn(targetTile, validTiles);
       case UnitType.Warship:
         return this.warshipSpawn(targetTile);
-      case UnitType.Shell:
-      case UnitType.SAMMissile:
-        return targetTile;
       case UnitType.TransportShip:
         return canBuildTransportShip(this.mg, this, targetTile);
       case UnitType.TradeShip:
         return this.tradeShipSpawn(targetTile);
-      case UnitType.Train:
+      case UnitType.Depot:
+      case UnitType.Army:
         return this.landBasedUnitSpawn(targetTile);
-      case UnitType.MissileSilo:
       case UnitType.DefensePost:
-      case UnitType.SAMLauncher:
       case UnitType.City:
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         return this.landBasedStructureSpawn(targetTile, validTiles);
       default:
         assertNever(unitType);
     }
-  }
-
-  nukeSpawn(tile: TileRef, nukeType: UnitType): TileRef | false {
-    const mg = this.mg;
-    if (mg.isSpawnImmunityActive()) {
-      return false;
-    }
-    // Impassable terrain cannot be nuked.
-    if (mg.isImpassable(tile)) {
-      return false;
-    }
-    const owner = this.mg.owner(tile);
-    // Allow nuking teammates after the game is over (aftergame fun), but not in singleplayer.
-    const gameOver =
-      mg.getWinner() !== null &&
-      mg.config().gameConfig().gameType !== GameType.Singleplayer;
-    if (owner.isPlayer()) {
-      if (this.isOnSameTeam(owner) && !gameOver) {
-        return false;
-      }
-    }
-    const config = mg.config();
-
-    // Prevent launching nukes that would hit teammate structures (only in team games).
-    // Disabled after game-over so players can nuke teammates in the aftergame.
-    if (
-      config.gameConfig().gameMode === GameMode.Team &&
-      nukeType !== UnitType.MIRV &&
-      !gameOver
-    ) {
-      const magnitude = config.nukeMagnitudes(nukeType);
-      const wouldHitTeammate = mg.anyUnitNearby(
-        tile,
-        magnitude.outer,
-        Structures.types,
-        (unit) => unit.owner().isPlayer() && this.isOnSameTeam(unit.owner()),
-      );
-      if (wouldHitTeammate) {
-        return false;
-      }
-    }
-
-    // only get missilesilos that are not on cooldown and not under construction
-    const readySilos = this.units(UnitType.MissileSilo).filter(
-      (silo) =>
-        silo.isActive() && !silo.isInCooldown() && !silo.isUnderConstruction(),
-    );
-    readySilos.sort(
-      (a, b) =>
-        mg.manhattanDist(a.tile(), tile) - mg.manhattanDist(b.tile(), tile),
-    );
-    return readySilos[0]?.tile() ?? false;
   }
 
   portSpawn(tile: TileRef, validTiles: TileRef[] | null): TileRef | false {
@@ -1979,14 +1950,16 @@ export class PlayerImpl implements Player {
       tileChangeVersion: this._tileChangeVersion,
       random: w.random(this._pseudo_random),
       gold: this._gold,
+      food: this._food,
+      science: this._science,
+      bronzeWeapons: this._bronzeWeapons,
+      markets: this._markets,
       troops: this._troops,
       tradeGold: this._tradeGold,
       trainGold: this._trainGold,
       piracyGold: this._piracyGold,
       goldEarned: this._goldEarned,
       markedTraitorTick: this.markedTraitorTick,
-      markedDoomsdayClockTick: this.markedDoomsdayClockTick,
-      rottedAtTick: this.rottedAtTick,
       betrayalCount: this._betrayalCount,
       embargoes: [...this.embargoes.values()].map((e) => ({
         target: w.player(e.target),
@@ -2051,14 +2024,16 @@ export class PlayerImpl implements Player {
     this._tileChangeVersion = s.tileChangeVersion;
     this._pseudo_random = r.random(s.random);
     this._gold = s.gold;
+    this._food = s.food;
+    this._science = s.science;
+    this._bronzeWeapons = s.bronzeWeapons;
+    this._markets = s.markets;
     this._troops = s.troops;
     this._tradeGold = s.tradeGold;
     this._trainGold = s.trainGold;
     this._piracyGold = s.piracyGold;
     this._goldEarned = s.goldEarned;
     this.markedTraitorTick = s.markedTraitorTick;
-    this.markedDoomsdayClockTick = s.markedDoomsdayClockTick;
-    this.rottedAtTick = s.rottedAtTick;
     this._betrayalCount = s.betrayalCount;
     this.embargoes = new Map();
     for (const e of s.embargoes) {
@@ -2117,7 +2092,26 @@ export class PlayerImpl implements Player {
 
 export const PlayerSnapshot = snapshotType({
   name: "Player",
-  version: 1,
+  version: 4,
+  migrations: {
+    1: (data) => data,
+    2: (data) => ({
+      ...data,
+      food: 0n,
+      numUnitsConstructed: data.numUnitsConstructed.map(
+        ([type, count]: [string, number]) => [
+          migrateUnitTypeName(type),
+          count,
+        ],
+      ),
+    }),
+    3: (data) => ({
+      ...data,
+      science: 0n,
+      bronzeWeapons: false,
+      markets: false,
+    }),
+  },
   schema: z.object({
     smallID: zInt(),
     info: PlayerInfoSchema,
@@ -2126,14 +2120,16 @@ export const PlayerSnapshot = snapshotType({
     tileChangeVersion: zInt(),
     random: zRandom(),
     gold: z.bigint(),
+    food: z.bigint(),
+    science: z.bigint(),
+    bronzeWeapons: z.boolean(),
+    markets: z.boolean(),
     troops: z.bigint(),
     tradeGold: z.bigint(),
     trainGold: z.bigint(),
     piracyGold: z.bigint(),
     goldEarned: z.bigint(),
     markedTraitorTick: zInt(),
-    markedDoomsdayClockTick: zInt(),
-    rottedAtTick: zInt(),
     betrayalCount: zInt(),
     embargoes: z.array(
       z.object({

@@ -31,7 +31,7 @@ describe("BuildMenu.cost", () => {
       { type: UnitType.City, canBuild: true, canUpgrade: false, cost: 125n },
     ] as unknown as BuildableUnit[];
 
-    expect(menu.cost(item(UnitType.Factory))).toBe(0n);
+    expect(menu.cost(item(UnitType.Mine))).toBe(0n);
   });
 
   it("falls back to 0 before the buildables have arrived", () => {

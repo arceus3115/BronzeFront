@@ -120,7 +120,6 @@ describe("Stats column registry", () => {
   it("renders zero owned percentage when no valid land remains", () => {
     const game = makeGameView();
     vi.spyOn(game, "numLandTiles").mockReturnValue(0);
-    vi.spyOn(game, "numTilesWithFallout").mockReturnValue(0);
 
     expect(columnById("tiles").cell(emptyRow, game)).toBe("0.0%");
   });

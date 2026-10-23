@@ -20,12 +20,14 @@ export const UT_MIRV = "MIRV" as const;
 export const UT_SAM_MISSILE = "SAMMissile" as const;
 export const UT_SHELL = "Shell" as const;
 export const UT_MIRV_WARHEAD = "MIRV Warhead" as const;
-export const UT_TRAIN = "Train" as const;
+export const UT_TRAIN = "Depot" as const;
 
 // Structures
 export const UT_CITY = "City" as const;
 export const UT_PORT = "Port" as const;
 export const UT_FACTORY = "Factory" as const;
+export const UT_MINE = "Mine" as const;
+export const UT_FARM = "Farm" as const;
 export const UT_DEFENSE_POST = "Defense Post" as const;
 export const UT_SAM_LAUNCHER = "SAM Launcher" as const;
 export const UT_MISSILE_SILO = "Missile Silo" as const;
@@ -37,10 +39,9 @@ export const UT_MISSILE_SILO = "Missile Silo" as const;
 export const STRUCTURE_TYPES: ReadonlySet<string> = new Set([
   UT_CITY,
   UT_PORT,
-  UT_FACTORY,
+  UT_MINE,
+  UT_FARM,
   UT_DEFENSE_POST,
-  UT_SAM_LAUNCHER,
-  UT_MISSILE_SILO,
 ]);
 
 export const NUKE_TYPES: ReadonlySet<string> = new Set([
@@ -60,13 +61,7 @@ export const SMOOTHED_NUKE_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /** Units that leave a trail on the map (TrailManager). */
-export const TRAIL_TYPES: ReadonlySet<string> = new Set([
-  UT_TRANSPORT,
-  UT_ATOM_BOMB,
-  UT_HYDROGEN_BOMB,
-  UT_MIRV,
-  UT_MIRV_WARHEAD,
-]);
+export const TRAIL_TYPES: ReadonlySet<string> = new Set([UT_TRANSPORT]);
 
 /** Blast radii (in tiles) matching upstream DefaultConfig.nukeMagnitudes(). */
 export const NUKE_MAGNITUDES: Readonly<
@@ -95,6 +90,8 @@ export const ALL_UNIT_TYPES = [
   UT_CITY,
   UT_PORT,
   UT_FACTORY,
+  UT_MINE,
+  UT_FARM,
   UT_DEFENSE_POST,
   UT_SAM_LAUNCHER,
   UT_MISSILE_SILO,

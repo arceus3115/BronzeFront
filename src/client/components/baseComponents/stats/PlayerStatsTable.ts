@@ -1,7 +1,6 @@
 import {
   PlayerStats,
   boatUnits,
-  bombUnits,
   otherUnits,
 } from "@openfront/engine-api/StatsSchemas";
 import { renderNumber } from "@openfront/engine-lib/Format";
@@ -17,10 +16,9 @@ import { translateText } from "../../../Utils";
 const BUILDING_ORDER = {
   city: 1,
   port: 2,
-  fact: 3,
-  defp: 4,
-  silo: 5,
-  saml: 6,
+  farm: 3,
+  mine: 4,
+  defp: 5,
 } as const satisfies Record<
   Exclude<(typeof otherUnits)[number], "wshp">,
   number
@@ -32,27 +30,20 @@ const buildingUnits = (
 
 // Stat rows are keyed by the wire abbreviation, but the names themselves are
 // the same ones the build menu and the disabled-units list show, so they read
-// from `unit_type.*` rather than a parallel copy. Trade ships, transports and
-// MIRV warheads are stats-only rows and keep their own keys. `satisfies` fails
+// from `unit_type.*` rather than a parallel copy. Trade ships and transports
+// are stats-only rows and keep their own keys. `satisfies` fails
 // compilation if a new stat unit lands without a label.
 const UNIT_LABEL_KEYS = {
   city: "unit_type.city",
   defp: "unit_type.defense_post",
-  fact: "unit_type.factory",
+  farm: "unit_type.farm",
+  mine: "unit_type.mine",
   port: "unit_type.port",
-  saml: "unit_type.sam_launcher",
-  silo: "unit_type.missile_silo",
   wshp: "unit_type.warship",
-  abomb: "unit_type.atom_bomb",
-  hbomb: "unit_type.hydrogen_bomb",
-  mirv: "unit_type.mirv",
-  mirvw: "player_stats_table.unit.mirvw",
   trade: "player_stats_table.unit.trade",
   trans: "player_stats_table.unit.trans",
 } as const satisfies Record<
-  | (typeof otherUnits)[number]
-  | (typeof boatUnits)[number]
-  | (typeof bombUnits)[number],
+  (typeof otherUnits)[number] | (typeof boatUnits)[number],
   string
 >;
 
@@ -186,22 +177,6 @@ export class PlayerStatsTable extends LitElement {
             values: slots(stats?.boats?.[key], 4),
           })),
           "player_stats_table.ship_type",
-        )}
-        <!-- Launched and Landed count missiles this player fired; Intercepted
-        counts incoming missiles their SAMs shot down (bombIntercept credits
-        the SAM owner), so the last column is defensive. -->
-        ${statsSection(
-          "player_stats_table.nuke_stats",
-          [
-            "player_stats_table.launched",
-            "player_stats_table.landed",
-            "player_stats_table.intercepted",
-          ],
-          bombUnits.map((key) => ({
-            label: UNIT_LABEL_KEYS[key],
-            values: slots(stats?.bombs?.[key], 3),
-          })),
-          "player_stats_table.weapon",
         )}
         ${statsSection(
           "player_stats_table.attack_stats",

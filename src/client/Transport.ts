@@ -103,9 +103,28 @@ export class SendSpawnIntentEvent implements GameEvent {
 export class SendAttackIntentEvent implements GameEvent {
   constructor(
     public readonly targetID: PlayerID | null,
-    public readonly troops: number,
+    public readonly troops: number | null,
   ) {}
 }
+
+export class SendOrderArmyIntentEvent implements GameEvent {
+  constructor(
+    public readonly unitId: number,
+    public readonly tile: number,
+  ) {}
+}
+
+export class SendResearchIntentEvent implements GameEvent {
+  constructor(public readonly tech: "bronze_weapons" | "markets") {}
+}
+
+export class SendExchangeIntentEvent implements GameEvent {
+  constructor(
+    public readonly direction: "food_to_money" | "money_to_food",
+    public readonly amount: number,
+  ) {}
+}
+
 
 /**
  * Troops for a counter-attack: the incoming attack's size, capped at what the
@@ -131,7 +150,6 @@ export class BuildUnitIntentEvent implements GameEvent {
   constructor(
     public readonly unit: UnitType,
     public readonly tile: TileRef,
-    public readonly rocketDirectionUp?: boolean,
     public readonly amount?: number,
   ) {}
 }
@@ -309,6 +327,19 @@ export class Transport {
     );
     this.subscribe(SendSpawnIntentEvent, (e) => this.onSendSpawnIntentEvent(e));
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
+    this.subscribe(SendOrderArmyIntentEvent, (e) =>
+      this.sendIntent({ type: "order_army", unitId: e.unitId, tile: e.tile }),
+    );
+    this.subscribe(SendResearchIntentEvent, (e) =>
+      this.sendIntent({ type: "research", tech: e.tech }),
+    );
+    this.subscribe(SendExchangeIntentEvent, (e) =>
+      this.sendIntent({
+        type: "exchange",
+        direction: e.direction,
+        amount: e.amount,
+      }),
+    );
     this.subscribe(SendUpgradeStructureIntentEvent, (e) =>
       this.onSendUpgradeStructureIntent(e),
     );
@@ -804,7 +835,8 @@ export class Transport {
   }
 
   private onSendAttackIntent(event: SendAttackIntentEvent) {
-    if (!this.isSendableTroops("attack", event.troops)) return;
+    if (event.troops !== null && !this.isSendableTroops("attack", event.troops))
+      return;
     this.sendIntent({
       type: "attack",
       targetID: event.targetID,
@@ -891,8 +923,6 @@ export class Transport {
       type: "build_unit",
       unit: event.unit,
       tile: event.tile,
-      rocketDirectionUp: event.rocketDirectionUp,
-      amount: event.amount,
     });
   }
 

@@ -151,7 +151,7 @@ describe("Tribe upkeep", () => {
       ["human", PlayerType.Human],
     ]);
     tribe.buildUnit(UnitType.City, game.ref(10, 10), {});
-    tribe.buildUnit(UnitType.Factory, game.ref(10, 60), {});
+    tribe.buildUnit(UnitType.Mine, game.ref(10, 60), {});
     executeTicks(game, game.config().deleteUnitCooldown());
     const exec = tribeExecution();
     const spy = vi.spyOn(game, "addExecution");

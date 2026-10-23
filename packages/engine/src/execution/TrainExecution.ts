@@ -51,6 +51,11 @@ export class TrainExecution implements Execution {
     return this._tradeStopsVisited;
   }
 
+  /** The mine or farm this depot left. Delivery pay follows that building. */
+  public originType(): UnitType {
+    return this.source.unit.type();
+  }
+
   init(mg: Game, ticks: number): void {
     this.mg = mg;
     const stations = this.railNetwork.findStationsPath(
@@ -71,7 +76,7 @@ export class TrainExecution implements Execution {
       return;
     }
 
-    const spawn = this.player.canBuild(UnitType.Train, this.stations[0].tile());
+    const spawn = this.player.canBuild(UnitType.Depot, this.stations[0].tile());
     if (spawn === false) {
       console.warn(`cannot build train`);
       this.active = false;
@@ -160,20 +165,20 @@ export class TrainExecution implements Execution {
   }
 
   private createTrainUnits(tile: TileRef): Unit {
-    const train = this.player.buildUnit(UnitType.Train, tile, {
+    const train = this.player.buildUnit(UnitType.Depot, tile, {
       targetUnit: this.destination.unit,
       trainType: TrainType.Engine,
     });
     // Tail is also an engine, just for cosmetics
     this.cars.push(
-      this.player.buildUnit(UnitType.Train, tile, {
+      this.player.buildUnit(UnitType.Depot, tile, {
         targetUnit: this.destination.unit,
         trainType: TrainType.TailEngine,
       }),
     );
     for (let i = 0; i < this.numCars; i++) {
       this.cars.push(
-        this.player.buildUnit(UnitType.Train, tile, {
+        this.player.buildUnit(UnitType.Depot, tile, {
           trainType: TrainType.Carriage,
           loaded: this.hasCargo,
         }),

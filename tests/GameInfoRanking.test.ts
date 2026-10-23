@@ -59,11 +59,6 @@ describe("Ranking class", () => {
               units: { port: [2n, 0n, 0n, 2n] },
               conquests: [5n],
               gold: [0n, 100n, 20n, 0n, 15n, 5n], // total 140
-              bombs: {
-                abomb: [1n],
-                hbomb: [1n],
-                mirv: [2n],
-              },
             },
             persistentID: null,
           },
@@ -75,11 +70,6 @@ describe("Ranking class", () => {
               units: { city: [2n, 0n, 0n, 2n] },
               conquests: [8n],
               gold: [0n, 50n, 10n, 5n], // total 65, no train trade
-              bombs: {
-                abomb: [0n],
-                hbomb: [2n],
-                mirv: [0n],
-              },
             },
             persistentID: null,
           },
@@ -92,7 +82,6 @@ describe("Ranking class", () => {
               conquests: [8n],
               killedAt: BigInt(600),
               gold: [0n, 10n, 2n, 10n, 0n, 5n], //  total 27
-              bombs: {},
             },
             persistentID: null,
           },
@@ -121,8 +110,6 @@ describe("Ranking class", () => {
     expect(p1.username).toBe("Alice");
     expect(p1.flag).toBe("USA");
     expect(p1.conquests).toStrictEqual([5n]);
-    expect(p1.atoms).toBe(1);
-    expect(p1.mirv).toBe(2);
     expect(p1.killedAt).toBeUndefined();
 
     const p3 = players.find((p) => p.id === "p3")!;
@@ -174,14 +161,6 @@ describe("Ranking class", () => {
     expect(rankedPlayers[2].id).toBe("p1");
   });
 
-  test("rank by hydros", () => {
-    const r = new Ranking(makeSession());
-    const rankedPlayers = r.sortedBy(RankType.Hydros);
-    expect(rankedPlayers.length).toBe(3);
-    expect(rankedPlayers[0].id).toBe("p2");
-    expect(rankedPlayers[1].id).toBe("p1");
-    expect(rankedPlayers[2].id).toBe("p3");
-  });
 
   test("lifetime score is percentage of duration", () => {
     const r = new Ranking(makeSession());

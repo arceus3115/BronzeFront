@@ -140,6 +140,14 @@
         "scale": 1.08,
         "iconFill": 0.85
       },
+      "Mine": {
+        "scale": 1.08,
+        "iconFill": 0.85
+      },
+      "Farm": {
+        "scale": 1.08,
+        "iconFill": 0.85
+      },
       "Defense Post": {
         "scale": 1,
         "iconFill": 0.8
@@ -366,6 +374,14 @@
       "radius": 18,
       "intensity": 1.2
     },
+    "Mine": {
+      "radius": 18,
+      "intensity": 1.2
+    },
+    "Farm": {
+      "radius": 18,
+      "intensity": 1.2
+    },
     "Defense Post": {
       "radius": 18,
       "intensity": 1.2
@@ -407,6 +423,10 @@
       "intensity": 1
     },
     "Train": {
+      "radius": 6,
+      "intensity": 0.5
+    },
+    "Depot": {
       "radius": 6,
       "intensity": 0.5
     }

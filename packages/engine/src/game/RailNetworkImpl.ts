@@ -1,5 +1,5 @@
 import { TileRef } from "@openfront/engine-api/game/GameMap";
-import { UnitType } from "@openfront/engine-api/game/GameTypes";
+import { isDepotSource, UnitType } from "@openfront/engine-api/game/GameTypes";
 import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import {
   snapshotType,
@@ -261,7 +261,11 @@ export class RailNetworkImpl implements RailNetwork {
   }
 
   overlappingRailroads(unitType: UnitType, tile: TileRef): TileRef[] {
-    if (![UnitType.City, UnitType.Port, UnitType.Factory].includes(unitType)) {
+    if (
+      unitType !== UnitType.City &&
+      unitType !== UnitType.Port &&
+      !isDepotSource(unitType)
+    ) {
       return [];
     }
     const tiles = new Set<TileRef>();
@@ -278,7 +282,11 @@ export class RailNetworkImpl implements RailNetwork {
   }
 
   computeGhostRailPaths(unitType: UnitType, tile: TileRef): TileRef[][] {
-    if (![UnitType.City, UnitType.Port, UnitType.Factory].includes(unitType)) {
+    if (
+      unitType !== UnitType.City &&
+      unitType !== UnitType.Port &&
+      !isDepotSource(unitType)
+    ) {
       return [];
     }
 
@@ -290,21 +298,21 @@ export class RailNetworkImpl implements RailNetwork {
     const minRangeSquared = this.game.config().trainStationMinRange() ** 2;
     const maxPathSize = this.game.config().railroadMaxSize();
 
-    // A City or Port only joins the rail network when a Factory is already in
-    // range (see CityExecution/PortExecution). A Factory always becomes a
-    // station and pulls nearby City/Port/Factory into the network itself, so
-    // it needs no pre-existing factory to connect to.
-    const buildingFactory = unitType === UnitType.Factory;
+    // A city or port only joins the road network when a mine or farm is
+    // already in range. A mine or farm always becomes a station and pulls
+    // nearby cities, ports, mines, and farms in itself.
     if (
-      !buildingFactory &&
-      !this.game.hasUnitNearby(tile, maxRange, UnitType.Factory)
+      !isDepotSource(unitType) &&
+      !this.game.hasUnitNearby(tile, maxRange, UnitType.Mine) &&
+      !this.game.hasUnitNearby(tile, maxRange, UnitType.Farm)
     ) {
       return [];
     }
 
     const neighbors = this.game.nearbyUnits(tile, maxRange, [
       UnitType.City,
-      UnitType.Factory,
+      UnitType.Mine,
+      UnitType.Farm,
       UnitType.Port,
     ]);
     neighbors.sort((a, b) => a.distSquared - b.distSquared);
@@ -333,7 +341,7 @@ export class RailNetworkImpl implements RailNetwork {
         );
         if (alreadyReachable) continue;
         targetTile = neighborStation.tile();
-      } else if (buildingFactory) {
+      } else if (isDepotSource(unitType)) {
         targetTile = neighbor.unit.tile();
       } else {
         continue;
@@ -361,7 +369,7 @@ export class RailNetworkImpl implements RailNetwork {
     const neighbors = this.game.nearbyUnits(
       station.tile(),
       this.game.config().trainStationMaxRange(),
-      [UnitType.City, UnitType.Factory, UnitType.Port],
+      [UnitType.City, UnitType.Mine, UnitType.Farm, UnitType.Port],
     );
 
     const editedClusters = new Set<Cluster>();

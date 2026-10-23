@@ -25,9 +25,7 @@ import { TerrainMapData } from "@openfront/engine-lib/game/TerrainMapLoader";
 import { TerraNulliusImpl } from "@openfront/engine-lib/game/TerraNulliusImpl";
 import { UnitGrid } from "@openfront/engine-lib/game/UnitGrid";
 import { PlayerCosmetics, WirePlayer } from "@openfront/shared/WireSchemas";
-import { computeAllianceClusters } from "../render/frame/derive/AllianceClusters";
 import { extractAttackRings } from "../render/frame/derive/AttackRings";
-import { extractNukeTelegraphs } from "../render/frame/derive/NukeTelegraphs";
 import { computePlayerStatus } from "../render/frame/derive/PlayerStatus";
 import { buildRelationMatrix } from "../render/frame/derive/RelationMatrix";
 import { RailroadCache } from "../render/frame/RailroadCache";
@@ -79,7 +77,6 @@ export class GameView implements GameLike {
   private _teamClanTags: Map<Team, string | null> | null = null;
   private updatedTiles: TileRef[] = [];
   private updatedTerrainTiles: TileRef[] = [];
-  private nukeImpactTiles: TileRef[] = [];
   /**
    * Active units grouped by owner smallID, built lazily at most once per
    * tick. Keeps per-player unit queries (PlayerView.units) at O(own units)
@@ -116,8 +113,6 @@ export class GameView implements GameLike {
   private _namesDirty = true;
   /** Relation matrix: allies/embargoes changed, or a player was added. */
   private _relationsDirty = true;
-  /** Alliance clusters: allies changed, or a player was added. */
-  private _clustersDirty = true;
 
   private unitGrid: UnitGrid<UnitView>;
   private readonly motion = new MotionPlanResolver();
@@ -203,8 +198,6 @@ export class GameView implements GameLike {
       relationMatrix: new Uint8Array(0),
       relationSize: 0,
       relationsDirty: false,
-      allianceClusters: new Map(),
-      nukeTelegraphs: [],
       attackRings: [],
       structuresDirty: false,
     };
@@ -254,10 +247,6 @@ export class GameView implements GameLike {
         this.updatedTerrainTiles.push(tile);
       }
     }
-
-    // Nuke blast-radius tiles (for nukeable layer destruction).
-    const packedNukes = gu.packedNukeImpacts;
-    this.nukeImpactTiles = packedNukes ? Array.from(packedNukes) : [];
 
     if (gu.packedMotionPlans) {
       this.motion.applyRecords(unpackMotionPlans(gu.packedMotionPlans));
@@ -323,7 +312,6 @@ export class GameView implements GameLike {
       // means the field changed this tick.
       if (pu.allies !== undefined) {
         this._relationsDirty = true;
-        this._clustersDirty = true;
       }
       if (pu.embargoes !== undefined) {
         this._relationsDirty = true;
@@ -360,7 +348,6 @@ export class GameView implements GameLike {
         }
         this._namesDirty = true;
         this._relationsDirty = true;
-        this._clustersDirty = true;
         this._teamClanTags = null;
       }
     });
@@ -515,19 +502,16 @@ export class GameView implements GameLike {
     f.trailDirtyRowMin = this.trailManager.dirtyRowMin;
     f.trailDirtyRowMax = this.trailManager.dirtyRowMax;
 
-    f.playerStatus = computePlayerStatus(this._playerStates, this._unitStates, {
+    f.playerStatus = computePlayerStatus(this._playerStates, {
       localPlayerSmallID: this._myPlayer?.smallID() ?? 0,
       localPlayerID: this._myPlayer?.id() ?? "",
-      tileState: this._map.tileStateBuffer(),
       tick: gu.tick,
       allianceDuration: this._config.allianceDuration(),
       isTransitiveTarget: (sid) =>
         (this._markedPlayers?.has(sid) ?? false) ||
         (this._myPlayer?.hasTransitiveTarget(sid) ?? false),
-      doomsdayClockWarnTicks:
-        this._config.doomsdayClockConfig().warnSeconds * 10,
     });
-    // Relations + clusters depend only on allies/embargoes/teams, which
+    // Relations depend only on allies, embargoes and teams, which
     // change rarely (teams only when a player is added) — recompute only
     // when one of those inputs arrived this tick. buildRelationMatrix
     // writes into a reusable module-level buffer, so skipping the call
@@ -543,21 +527,6 @@ export class GameView implements GameLike {
     } else {
       f.relationsDirty = false;
     }
-    if (this._clustersDirty) {
-      this._clustersDirty = false;
-      f.allianceClusters = computeAllianceClusters(this._playerStates);
-    }
-    f.nukeTelegraphs = extractNukeTelegraphs(
-      this._unitStates,
-      this._map.width(),
-      this._myPlayer?.smallID() ?? 0,
-      // The latest relation matrix — recomputed above when dirty, otherwise
-      // carried over on the frame from the last rebuild.
-      f.relationMatrix,
-      f.relationSize,
-      this.motion.gridPlans(),
-      gu.tick,
-    );
     f.attackRings = this._myPlayer
       ? extractAttackRings(
           this._unitStates,
@@ -652,9 +621,6 @@ export class GameView implements GameLike {
 
   recentlyUpdatedTerrainTiles(): TileRef[] {
     return this.updatedTerrainTiles;
-  }
-  recentlyNukedTiles(): TileRef[] {
-    return this.nukeImpactTiles;
   }
 
   nearbyUnits(
@@ -1003,12 +969,6 @@ export class GameView implements GameLike {
   setOwnerID(ref: TileRef, playerId: number): void {
     return this._map.setOwnerID(ref, playerId);
   }
-  hasFallout(ref: TileRef): boolean {
-    return this._map.hasFallout(ref);
-  }
-  setFallout(ref: TileRef, value: boolean): void {
-    return this._map.setFallout(ref, value);
-  }
   isBorder(ref: TileRef): boolean {
     return this._map.isBorder(ref);
   }
@@ -1042,6 +1002,12 @@ export class GameView implements GameLike {
   terrainType(ref: TileRef): TerrainType {
     return this._map.terrainType(ref);
   }
+  biome(ref: TileRef): TerrainType {
+    return this._map.biome(ref);
+  }
+  setBiome(ref: TileRef, biome: TerrainType): void {
+    this._map.setBiome(ref, biome);
+  }
   forEachTile(fn: (tile: TileRef) => void): void {
     return this._map.forEachTile(fn);
   }
@@ -1072,9 +1038,6 @@ export class GameView implements GameLike {
   }
   updateTile(tile: TileRef, state: number): boolean {
     return this._map.updateTile(tile, state);
-  }
-  numTilesWithFallout(): number {
-    return this._map.numTilesWithFallout();
   }
   gameID(): GameID {
     return this._gameID;

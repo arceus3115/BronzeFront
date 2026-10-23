@@ -20,7 +20,6 @@ function gameStart(): GameStartInfo {
     rankedType: RankedType.OneVOne,
     nations: "disabled",
     bots: 0,
-    doomsdayClock: { enabled: false, speed: "veryfast" },
   });
   return { ...start, players: start.players.slice(0, 2) };
 }

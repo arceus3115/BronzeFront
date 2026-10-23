@@ -12,14 +12,11 @@ import {
   GameType,
   PlayerInfo,
   PlayerType,
-  UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { unpackMotionPlans } from "@openfront/engine-lib/game/MotionPlans";
 import { AllianceRequestExecution } from "@openfront/engine/execution/alliance/AllianceRequestExecution";
 import { BreakAllianceExecution } from "@openfront/engine/execution/alliance/BreakAllianceExecution";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
-import { ConstructionExecution } from "@openfront/engine/execution/ConstructionExecution";
-import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { SpawnExecution } from "@openfront/engine/execution/SpawnExecution";
 import { TransportShipExecution } from "@openfront/engine/execution/TransportShipExecution";
 import { Game, Player } from "@openfront/engine/game/Game";
@@ -155,7 +152,7 @@ describe("replay round trip", () => {
       spawnHuman(game, "bob", 150, 150);
     });
 
-    test("alliance, betrayal, attacks and a nuke detonation", async () => {
+    test("alliance, betrayal, and attacks", async () => {
       const rec = await recordGame(game, {
         ticks: 260,
         skipInit: true,
@@ -179,27 +176,6 @@ describe("replay round trip", () => {
             g.addExecution(new AllianceRequestExecution(bob, alice.id()));
           if (t === 40)
             g.addExecution(new BreakAllianceExecution(alice, bob.id()));
-          // Mutations must happen inside a tick (via executions) to reach the
-          // update stream - exactly as in a real game.
-          if (t === 60) {
-            g.addExecution(
-              new ConstructionExecution(
-                alice,
-                UnitType.MissileSilo,
-                g.ref(20, 20),
-              ),
-            );
-          }
-          if (t === 64) {
-            g.addExecution(
-              new NukeExecution(
-                UnitType.AtomBomb,
-                alice,
-                g.ref(150, 150),
-                null,
-              ),
-            );
-          }
           if (t === 120)
             g.addExecution(new AttackExecution(null, alice, bob.id()));
         },
@@ -213,22 +189,7 @@ describe("replay round trip", () => {
       expect(
         rec.truth.some((t) => t.players.get(alice.smallID())!.isTraitor),
       ).toBe(true);
-      // Nuke detonation: impacted tiles and a dead AtomBomb that reached target.
-      expect(h.nukeImpacts.length).toBeGreaterThan(0);
-      expect(
-        h.nukeImpacts.every((e) => e.land.length + e.water.length > 0),
-      ).toBe(true);
-      expect(
-        h.deadUnitEvents.some(
-          (e) =>
-            e.unitType === UnitType.AtomBomb &&
-            e.reachedTarget &&
-            e.ownerSmallID === alice.smallID(),
-        ),
-      ).toBe(true);
-      expect(
-        h.constructionStarts.length + h.deadUnitEvents.length,
-      ).toBeGreaterThan(0);
+      expect(h.players.length).toBeGreaterThan(0);
     }, 60_000);
   });
 

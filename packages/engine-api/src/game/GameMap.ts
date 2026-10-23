@@ -34,8 +34,6 @@ export interface GameMap {
   hasOwner(ref: TileRef): boolean;
 
   setOwnerID(ref: TileRef, playerId: number): void;
-  hasFallout(ref: TileRef): boolean;
-  setFallout(ref: TileRef, value: boolean): void;
   isOnEdgeOfMap(ref: TileRef): boolean;
   isBorder(ref: TileRef): boolean;
   neighbors(ref: TileRef): TileRef[];
@@ -58,6 +56,9 @@ export interface GameMap {
   isShore(ref: TileRef): boolean;
   cost(ref: TileRef): number;
   terrainType(ref: TileRef): TerrainType;
+  /** Gameplay land type. One-byte maps derive a coarse biome. */
+  biome(ref: TileRef): TerrainType;
+  setBiome(ref: TileRef, biome: TerrainType): void;
   forEachTile(fn: (tile: TileRef) => void): void;
 
   manhattanDist(c1: TileRef, c2: TileRef): number;
@@ -98,10 +99,7 @@ export interface GameMap {
    *
    * The bit layout of each `uint16` matches the renderer's tile state:
    *   bits  0-11: ownerID
-   *   bit   13:  fallout
    *   bit   14:  defense bonus
    */
   tileStateBuffer(): Uint16Array;
-
-  numTilesWithFallout(): number;
 }

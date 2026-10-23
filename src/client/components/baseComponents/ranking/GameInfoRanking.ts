@@ -14,9 +14,6 @@ export enum RankType {
   ConquestHumans = "ConquestHumans",
   ConquestNations = "ConquestNations",
   ConquestBots = "ConquestBots",
-  Atoms = "Atoms",
-  Hydros = "Hydros",
-  MIRV = "MIRV",
   TotalGold = "TotalGold",
   StolenGold = "StolenGold",
   NavalTrade = "NavalTrade",
@@ -30,9 +27,6 @@ export const RANK_TYPE_LABEL_KEYS: Record<RankType, string> = {
   [RankType.ConquestHumans]: "game_info_modal.num_of_conquests_humans",
   [RankType.ConquestNations]: "game_info_modal.num_of_conquests_nations",
   [RankType.ConquestBots]: "game_info_modal.num_of_conquests_bots",
-  [RankType.Atoms]: "game_info_modal.atoms",
-  [RankType.Hydros]: "game_info_modal.hydros",
-  [RankType.MIRV]: "game_info_modal.mirv",
   [RankType.TotalGold]: "game_info_modal.all_gold",
   [RankType.StolenGold]: "game_info_modal.stolen_gold",
   [RankType.NavalTrade]: "game_info_modal.naval_trade",
@@ -49,9 +43,6 @@ export interface PlayerInfo {
   conquests: bigint[];
   flag?: string;
   winner: boolean;
-  atoms: number;
-  hydros: number;
-  mirv: number;
 }
 
 function hasPlayed(player: PlayerRecord): boolean {
@@ -105,9 +96,6 @@ export class Ranking {
             ? undefined
             : Number(stats.killedAt),
         gold,
-        atoms: Number(stats.bombs?.abomb?.[0]) || 0,
-        hydros: Number(stats.bombs?.hbomb?.[0]) || 0,
-        mirv: Number(stats.bombs?.mirv?.[0]) || 0,
         winner: false,
       };
     }
@@ -148,12 +136,6 @@ export class Ranking {
         return Number(player.conquests[PLAYER_INDEX_NATION] ?? 0n);
       case RankType.ConquestBots:
         return Number(player.conquests[PLAYER_INDEX_BOT] ?? 0n);
-      case RankType.Atoms:
-        return player.atoms;
-      case RankType.Hydros:
-        return player.hydros;
-      case RankType.MIRV:
-        return player.mirv;
       case RankType.TotalGold:
         return Number(player.gold.reduce((sum, gold) => sum + gold, 0n));
       case RankType.StolenGold:

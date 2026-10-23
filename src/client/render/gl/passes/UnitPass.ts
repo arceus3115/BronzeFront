@@ -456,7 +456,7 @@ export class UnitPass {
     this.smoothSegs.length = 0;
 
     for (const unit of units.values()) {
-      if (!unit.isActive || unit.waitTicks > 0) continue;
+      if (!unit.isActive) continue;
 
       let atlasIdx = this.typeToAtlasCol.get(unit.unitType);
 

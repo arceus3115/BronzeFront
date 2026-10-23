@@ -26,7 +26,6 @@ const COPIED_KEYS = [
   "playerTeams",
   "allowedPublicIds",
   "trusted",
-  "doomsdayClock",
   "overtime",
   "anonymizeNames",
   "nameReveals",
@@ -43,7 +42,6 @@ const NULLABLE_KEYS = [
   "startingGold",
   "disableAlliances",
   "customAllianceDuration",
-  "waterNukes",
 ] as const satisfies readonly (keyof GameConfig)[];
 
 type NullableKey = (typeof NULLABLE_KEYS)[number];

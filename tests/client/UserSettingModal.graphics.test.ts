@@ -16,7 +16,7 @@ type TestModal = UserSettingModal & {
 };
 
 const LAYERS: MapLayer[] = [
-  { id: "forest", placement: "land", nukeable: true, alpha: 0.8 },
+  { id: "forest", placement: "land", alpha: 0.8 },
   { id: "reef", placement: "water" },
 ];
 

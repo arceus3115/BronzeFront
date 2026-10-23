@@ -50,14 +50,15 @@ export function diffPlayerUpdate(
     prev.isDisconnected === next.isDisconnected &&
     prev.killedBy === next.killedBy &&
     prev.deathPosition === next.deathPosition &&
+    prev.food === next.food &&
+    prev.science === next.science &&
+    prev.bronzeWeapons === next.bronzeWeapons &&
+    prev.markets === next.markets &&
     prev.tradeGold === next.tradeGold &&
     prev.trainGold === next.trainGold &&
     prev.piracyGold === next.piracyGold &&
     prev.isTraitor === next.isTraitor &&
     prev.traitorRemainingTicks === next.traitorRemainingTicks &&
-    prev.inDoomsdayClock === next.inDoomsdayClock &&
-    prev.markedDoomsdayClockTick === next.markedDoomsdayClockTick &&
-    prev.isDecaying === next.isDecaying &&
     prev.hasSpawned === next.hasSpawned &&
     prev.spawnTile === next.spawnTile &&
     prev.betrayals === next.betrayals &&
@@ -103,6 +104,10 @@ export function diffPlayerUpdate(
   setIfDifferent("isDisconnected", prev.isDisconnected === next.isDisconnected);
   setIfDifferent("killedBy", prev.killedBy === next.killedBy);
   setIfDifferent("deathPosition", prev.deathPosition === next.deathPosition);
+  setIfDifferent("food", prev.food === next.food);
+  setIfDifferent("science", prev.science === next.science);
+  setIfDifferent("bronzeWeapons", prev.bronzeWeapons === next.bronzeWeapons);
+  setIfDifferent("markets", prev.markets === next.markets);
   setIfDifferent("tradeGold", prev.tradeGold === next.tradeGold);
   setIfDifferent("trainGold", prev.trainGold === next.trainGold);
   setIfDifferent("piracyGold", prev.piracyGold === next.piracyGold);
@@ -113,15 +118,6 @@ export function diffPlayerUpdate(
     "traitorRemainingTicks",
     prev.traitorRemainingTicks === next.traitorRemainingTicks,
   );
-  setIfDifferent(
-    "inDoomsdayClock",
-    prev.inDoomsdayClock === next.inDoomsdayClock,
-  );
-  setIfDifferent(
-    "markedDoomsdayClockTick",
-    prev.markedDoomsdayClockTick === next.markedDoomsdayClockTick,
-  );
-  setIfDifferent("isDecaying", prev.isDecaying === next.isDecaying);
   setIfDifferent("hasSpawned", prev.hasSpawned === next.hasSpawned);
   setIfDifferent("spawnTile", prev.spawnTile === next.spawnTile);
   setIfDifferent("betrayals", prev.betrayals === next.betrayals);

@@ -393,9 +393,6 @@ export class AttackExecution implements Execution {
                 defender.isDisconnected() && this._owner.isOnSameTeam(defender),
             },
       defenderHasDefensePost,
-      falloutRatio: this.mg.hasFallout(tile)
-        ? this.mg.numTilesWithFallout() / this.mg.numLandTiles()
-        : null,
       borderSize,
     };
   }

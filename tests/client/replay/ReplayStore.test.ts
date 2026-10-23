@@ -53,7 +53,6 @@ const file = (n: number): ReplayData => ({
     players: [],
     unitTypes: [],
     events: {
-      nukeImpacts: [],
       railroadEvents: [],
       motionPlans: [],
       constructionStarts: [],
@@ -77,28 +76,20 @@ test("a replay's size is its chunks, plus the rest as JSON", async () => {
   expect(replaySize(await toStored(file(40)))).toBe(40 + REST);
 });
 
-test("nuke impacts and dead units are kept packed and gzipped", async () => {
+test("dead units are kept packed and gzipped", async () => {
   const replay = file(4);
-  replay.append.events.nukeImpacts = [
-    { tick: 30, land: [2105, 2100, 2101], water: [9] },
-    { tick: 31, land: [], water: [7, 3] },
-  ];
   replay.append.events.deadUnitEvents = [
     {
       tick: 31,
       unitId: 812,
-      unitType: "Atom Bomb",
+      unitType: "Warship",
       ownerSmallID: 3,
       pos: 2101,
       reachedTarget: true,
     },
   ];
   const stored = await toStored(replay);
-  expect(stored.append.events).not.toHaveProperty("nukeImpacts");
   expect(stored.append.events).not.toHaveProperty("deadUnitEvents");
-  // Tiles come back sorted; their order never mattered.
-  replay.append.events.nukeImpacts[0].land.sort((a, b) => a - b);
-  replay.append.events.nukeImpacts[1].water.sort((a, b) => a - b);
   expect(await fromStored(stored)).toEqual(replay);
 });
 

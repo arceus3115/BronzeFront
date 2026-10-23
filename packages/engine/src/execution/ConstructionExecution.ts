@@ -7,7 +7,10 @@ import {
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { z } from "zod";
 import { Execution, Game, Player, Unit } from "../game/Game";
-import { UnitTypeSchema } from "../snapshot/CommonSchemas";
+import {
+  migrateUnitTypeName,
+  UnitTypeSchema,
+} from "../snapshot/CommonSchemas";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type {
   ExecRecord,
@@ -17,11 +20,7 @@ import type {
 import { CityExecution } from "./CityExecution";
 import { DefensePostExecution } from "./DefensePostExecution";
 import { FactoryExecution } from "./FactoryExecution";
-import { MirvExecution } from "./MIRVExecution";
-import { MissileSiloExecution } from "./MissileSiloExecution";
-import { NukeExecution } from "./NukeExecution";
 import { PortExecution } from "./PortExecution";
-import { SAMLauncherExecution } from "./SAMLauncherExecution";
 import { WarshipExecution } from "./WarshipExecution";
 
 export class ConstructionExecution implements Execution {
@@ -35,8 +34,6 @@ export class ConstructionExecution implements Execution {
     private player: Player,
     private constructionType: UnitType,
     private tile: TileRef,
-    private rocketDirectionUp?: boolean,
-    private amount?: number,
   ) {}
 
   init(mg: Game, ticks: number): void {
@@ -60,7 +57,7 @@ export class ConstructionExecution implements Execution {
   tick(ticks: number): void {
     if (this.structure === null) {
       const info = this.mg.unitInfo(this.constructionType);
-      // For non-structure units (nukes/warship), charge once and delegate to specialized executions.
+      // For non-structure units (warship), charge once and delegate to the specialized execution.
       const isStructure = this.isStructure(this.constructionType);
       if (!isStructure) {
         // Defer validation and gold deduction to the specific execution
@@ -117,28 +114,6 @@ export class ConstructionExecution implements Execution {
     }
     const player = this.player;
     switch (this.constructionType) {
-      case UnitType.AtomBomb:
-      case UnitType.HydrogenBomb: {
-        const count = this.amount ?? 1;
-        for (let i = 0; i < count; i++) {
-          // NukeExecution staggers same-tick launches per silo itself.
-          this.mg.addExecution(
-            new NukeExecution(
-              this.constructionType,
-              player,
-              this.tile,
-              null,
-              -1,
-              0,
-              this.rocketDirectionUp,
-            ),
-          );
-        }
-        break;
-      }
-      case UnitType.MIRV:
-        this.mg.addExecution(new MirvExecution(player, this.tile));
-        break;
       case UnitType.Warship:
         this.mg.addExecution(
           new WarshipExecution({ owner: player, patrolTile: this.tile }),
@@ -147,21 +122,14 @@ export class ConstructionExecution implements Execution {
       case UnitType.Port:
         this.mg.addExecution(new PortExecution(this.structure!));
         break;
-      case UnitType.MissileSilo:
-        this.mg.addExecution(new MissileSiloExecution(this.structure!));
-        break;
       case UnitType.DefensePost:
         this.mg.addExecution(new DefensePostExecution(this.structure!));
-        break;
-      case UnitType.SAMLauncher:
-        this.mg.addExecution(
-          new SAMLauncherExecution(player, null, this.structure!),
-        );
         break;
       case UnitType.City:
         this.mg.addExecution(new CityExecution(this.structure!));
         break;
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         this.mg.addExecution(new FactoryExecution(this.structure!));
         break;
       default:
@@ -175,11 +143,10 @@ export class ConstructionExecution implements Execution {
   private isStructure(type: UnitType): boolean {
     switch (type) {
       case UnitType.Port:
-      case UnitType.MissileSilo:
       case UnitType.DefensePost:
-      case UnitType.SAMLauncher:
       case UnitType.City:
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         return true;
       default:
         return false;
@@ -201,8 +168,6 @@ export class ConstructionExecution implements Execution {
       player: w.player(this.player),
       constructionType: this.constructionType,
       tile: this.tile,
-      rocketDirectionUp: this.rocketDirectionUp,
-      amount: this.amount,
       structure: w.unitOrNull(this.structure),
       ticksUntilComplete: this.ticksUntilComplete,
     });
@@ -214,8 +179,6 @@ export class ConstructionExecution implements Execution {
     this.player = r.player(s.player);
     this.constructionType = s.constructionType;
     this.tile = s.tile;
-    this.rocketDirectionUp = s.rocketDirectionUp;
-    this.amount = s.amount;
     this.structure = r.unitOrNull(s.structure);
     this.ticksUntilComplete = s.ticksUntilComplete as Tick;
   }
@@ -228,8 +191,6 @@ const ConstructionStateSchema = z.object({
   constructionType: UnitTypeSchema,
   // Validated in init, so a pending execution may hold any number.
   tile: zInt(),
-  rocketDirectionUp: z.boolean().optional(),
-  amount: zInt().optional(),
   structure: zRef().nullable(),
   // Unset until a structure with a build time is placed.
   ticksUntilComplete: zInt().optional(),
@@ -238,7 +199,14 @@ type ConstructionState = z.infer<typeof ConstructionStateSchema>;
 
 export const ConstructionExecutionSnapshot = execSnapshotType({
   name: "Construction",
-  version: 1,
+  version: 3,
+  migrations: {
+    1: (data) => data,
+    2: (data) => ({
+      ...data,
+      constructionType: migrateUnitTypeName(data.constructionType),
+    }),
+  },
   schema: ConstructionStateSchema,
   cls: () => ConstructionExecution,
 });

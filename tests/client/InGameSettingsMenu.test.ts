@@ -247,7 +247,7 @@ describe("in-game menu opens the shared settings modal", () => {
       ...publicFfa,
       gameType: GameType.Private,
       difficulty: Difficulty.Easy,
-      disabledUnits: [UnitType.City, UnitType.MIRV],
+      disabledUnits: [UnitType.City, UnitType.Warship],
       hostCheats: { infiniteTroops: true, goldMultiplier: 3 },
     };
     await openMenu();
@@ -259,7 +259,7 @@ describe("in-game menu opens the shared settings modal", () => {
     expect(menu.querySelector("[data-modifier-tags]")).toBeNull();
     expect(texts("[data-disabled-units]")).toEqual([
       "unit_type.city",
-      "unit_type.mirv",
+      "unit_type.warship",
     ]);
     expect(texts("[data-host-cheats]")).toEqual([
       "game_settings.infinite_troops",

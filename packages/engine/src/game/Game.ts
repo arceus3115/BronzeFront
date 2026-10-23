@@ -9,20 +9,17 @@ import {
   Gold,
   MessageType,
   Nation,
-  NukeState,
   PlayerBuildableUnitType,
   PlayerID,
   PlayerInfo,
   PlayerProfile,
   PlayerType,
   Relation,
-  SamLauncherState,
   SpawnArea,
   Team,
   TerraNullius,
   Tick,
   TrainType,
-  TrajectoryTile,
   TransportShipState,
   UnitInfo,
   UnitType,
@@ -63,54 +60,31 @@ export interface UnitParamsMap {
     patrolTile: TileRef;
   };
 
-  [UnitType.Shell]: Record<string, never>;
-
-  [UnitType.SAMMissile]: {
-    targetUnit: Unit;
-  };
-
   [UnitType.Port]: Record<string, never>;
-
-  [UnitType.AtomBomb]: {
-    targetTile?: number;
-    trajectory: TrajectoryTile[];
-  };
-
-  [UnitType.HydrogenBomb]: {
-    targetTile?: number;
-    trajectory: TrajectoryTile[];
-  };
-
-  [UnitType.MIRV]: {
-    targetTile?: number;
-    targetPlayer?: Player | TerraNullius;
-  };
-
-  [UnitType.MIRVWarhead]: {
-    targetTile?: number;
-    trajectory: TrajectoryTile[];
-  };
 
   [UnitType.TradeShip]: {
     targetUnit: Unit;
     lastSetSafeFromPirates?: number;
   };
 
-  [UnitType.Train]: {
+  [UnitType.Depot]: {
     trainType: TrainType;
     targetUnit?: Unit;
     loaded?: boolean;
   };
 
-  [UnitType.Factory]: Record<string, never>;
+  [UnitType.Mine]: Record<string, never>;
 
-  [UnitType.MissileSilo]: Record<string, never>;
+  [UnitType.Farm]: Record<string, never>;
 
   [UnitType.DefensePost]: Record<string, never>;
 
-  [UnitType.SAMLauncher]: Record<string, never>;
-
   [UnitType.City]: Record<string, never>;
+
+  [UnitType.Army]: {
+    troops?: number;
+    targetTile?: TileRef;
+  };
 }
 
 // Type helper to get params type for a specific unit type
@@ -233,13 +207,8 @@ export interface Unit extends UnitLike {
   setTargetTile(cell: TileRef | undefined): void;
   targetTile(): TileRef | undefined;
   targetPlayer(): Player | TerraNullius | undefined;
-  setTrajectoryIndex(i: number): void;
-  trajectoryIndex(): number;
-  trajectory(): TrajectoryTile[];
   setTargetUnit(unit: Unit | undefined): void;
   targetUnit(): Unit | undefined;
-  setTargetedBySAM(targeted: boolean): void;
-  targetedBySAM(): boolean;
   setReachedTarget(): void;
   reachedTarget(): boolean;
   isTargetable(): boolean;
@@ -251,8 +220,6 @@ export interface Unit extends UnitLike {
   updateWarshipState(update: Partial<WarshipState>): void;
   transportShipState(): TransportShipState;
   updateTransportShipState(update: Partial<TransportShipState>): void;
-  nukeState(): NukeState;
-  updateNukeState(update: Partial<NukeState>): void;
 
   health(): number;
   /** Effective max health, including any warship veterancy bonus. */
@@ -272,13 +239,6 @@ export interface Unit extends UnitLike {
   troops(): number;
 
   // --- UNIT SPECIFIC ---
-
-  // SAMs & Missile Silos
-  launch(): void;
-  reloadMissile(): void;
-  isInCooldown(): boolean;
-  missileTimerQueue(): number[];
-  samLauncherState(): SamLauncherState | undefined;
 
   // Trade Ships
   setSafeFromPirates(): void; // Only for trade ships
@@ -325,14 +285,6 @@ export interface Player extends PlayerLike {
   isAlive(): boolean;
   isTraitor(): boolean;
   markTraitor(): void;
-  // Doomsday Clock (anti-stall): marked when below the rising territory bar.
-  inDoomsdayClock(): boolean;
-  /** Territory is actively rotting away (the final doomsday phase). */
-  isDecaying(): boolean;
-  markRotted(): void;
-  doomsdayClockTicks(): number;
-  enterDoomsdayClock(): void;
-  clearDoomsdayClock(): void;
   largestClusterBoundingBox: { min: Cell; max: Cell } | null;
   lastTileChange(): Tick;
   /** Counter bumped on every ownership change of one of this player's tiles (also when its border set can change). */
@@ -361,6 +313,20 @@ export interface Player extends PlayerLike {
   gold(): Gold;
   addGold(toAdd: Gold, tile?: TileRef): void;
   removeGold(toRemove: Gold): Gold;
+
+  food(): Gold;
+  addFood(toAdd: Gold): void;
+  science(): Gold;
+  addScience(toAdd: Gold): void;
+  removeScience(toRemove: Gold): Gold;
+  hasBronzeWeapons(): boolean;
+  hasMarkets(): boolean;
+  unlockBronzeWeapons(): void;
+  unlockMarkets(): void;
+  foodYield(): number;
+  mineYield(): number;
+  addYield(food: number, mine: number): void;
+  strengthMultiplier(): number;
 
   // Cumulative trade revenue, surfaced on the live PlayerUpdate so clients can
   // compute per-source gold rates (leaderboard "Ship/Train Trade Gold/min").
@@ -633,21 +599,15 @@ export interface Game extends GameLike {
   // Nations
   nations(): Nation[];
 
-  numTilesWithFallout(): number;
   stats(): Stats;
 
   addUpdate(update: GameUpdate): void;
   railNetwork(): RailNetwork;
-  /** MIRVs launched so far by anyone; each one raises the next one's price. */
-  mirvsLaunched(): number;
-  recordMirvLaunch(): void;
   /**
    * Round-robin counter per ship kind, used to spread the ships' water
    * pathfinder rebuilds over WaterPathFinder.STAGGER_SPREAD ticks.
    */
   nextShipStagger(kind: "tradeShip" | "transportShip"): number;
-  /** Tick each player was last hit by a nation MIRV, shared by all nations. */
-  nationMirvTargets(): Map<PlayerID, Tick>;
   conquerPlayer(conqueror: Player, conquered: Player): void;
   miniWaterHPA(): PathFinder<number> | null;
   miniWaterGraph(): AbstractGraph | null;
@@ -665,15 +625,6 @@ export interface Game extends GameLike {
    * heuristics. `null` means no usable water body for ports.
    */
   sharedWaterComponents(player: Player): Set<number> | null;
-  /** Incremented each time the water navigation graph is rebuilt (e.g. after nuke terrain change). */
+  /** Incremented each time the water navigation graph is rebuilt. */
   waterGraphVersion(): number;
-
-  /** Queue a land tile for conversion to water (batched every few ticks). Tile must be unowned. */
-  queueWaterConversion(tile: TileRef): void;
-
-  /** Queue a tile that was inside a nuke blast radius (for nukeable layer destruction). */
-  queueNukeImpact(tile: TileRef): void;
-
-  /** Drain all tiles from nuke impacts this tick. Called once per tick. */
-  drainNukeImpacts(): TileRef[];
 }

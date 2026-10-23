@@ -15,7 +15,6 @@ import {
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { GameConfig, TeamCountConfig } from "@openfront/engine-api/Schemas";
-import { SAM_CONSTRUCTION_TICKS } from "@openfront/engine-lib/configuration/Config";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { ScheduledPublicGameType } from "@openfront/shared/WireSchemas";
 import { logger } from "./Logger";
@@ -74,11 +73,24 @@ type ModifierKey =
   | "startingGold25M"
   | "goldMultiplier"
   | "isAlliancesDisabled"
-  | "isNukesDisabled"
-  | "isSAMsDisabled"
-  | "isPeaceTime"
-  | "isWaterNukes"
-  | "isDoomsdayClock";
+  | "isPeaceTime";
+
+const KNOWN_MODIFIER_KEYS = new Set<ModifierKey>([
+  "isRandomSpawn",
+  "isCompact",
+  "isCrowded",
+  "isHardNations",
+  "startingGold1M",
+  "startingGold5M",
+  "startingGold25M",
+  "goldMultiplier",
+  "isAlliancesDisabled",
+  "isPeaceTime",
+]);
+
+function isModifierKey(value: string): value is ModifierKey {
+  return KNOWN_MODIFIER_KEYS.has(value as ModifierKey);
+}
 
 // Each entry represents one "ticket" in the pool. More tickets = higher chance of selection.
 // Weights are roughly informed by the community "favorite modifier" poll.
@@ -92,22 +104,8 @@ const SPECIAL_MODIFIER_POOL: ModifierKey[] = [
   ...Array<ModifierKey>(3).fill("startingGold25M"),
   ...Array<ModifierKey>(6).fill("goldMultiplier"),
   ...Array<ModifierKey>(1).fill("isAlliancesDisabled"),
-  ...Array<ModifierKey>(1).fill("isNukesDisabled"),
-  ...Array<ModifierKey>(1).fill("isSAMsDisabled"),
   ...Array<ModifierKey>(1).fill("isPeaceTime"),
-  ...Array<ModifierKey>(4).fill("isWaterNukes"),
-  ...Array<ModifierKey>(4).fill("isDoomsdayClock"),
 ];
-
-// Speeds the Doomsday Clock can roll at when it lands in the rotation. Picked
-// per game (see getSpecialConfig) so the pacing varies instead of always being
-// the same preset.
-const DOOMSDAY_ROTATION_SPEEDS = [
-  "slow",
-  "normal",
-  "fast",
-  "veryfast",
-] as const;
 
 // Modifiers that cannot be active at the same time.
 const MUTUALLY_EXCLUSIVE_MODIFIERS: [ModifierKey, ModifierKey][] = [
@@ -115,8 +113,6 @@ const MUTUALLY_EXCLUSIVE_MODIFIERS: [ModifierKey, ModifierKey][] = [
   ["startingGold5M", "startingGold1M"],
   ["startingGold25M", "startingGold1M"],
   ["isHardNations", "startingGold25M"],
-  ["isNukesDisabled", "isSAMsDisabled"],
-  ["isNukesDisabled", "isWaterNukes"],
 ];
 
 // Special games roll ffa/team per-game (see getSpecialConfig), so their
@@ -271,12 +267,6 @@ export class MapPlaylist {
       excludedModifiers.push("isHardNations");
     }
 
-    // On special team maps nukes-disabled makes cross-water attacks
-    // nearly impossible (extreme warship spam).
-    if (mode === GameMode.Team && SPECIAL_TEAM_MAPS.has(map)) {
-      excludedModifiers.push("isNukesDisabled");
-    }
-
     if (playerTeams === HumansVsNations) {
       excludedModifiers.push("startingGold25M"); // Nations are disabled if that modifier is active (Because of PVP immunity)
       excludedModifiers.push("isPeaceTime"); // Nations don't have PVP immunity
@@ -299,13 +289,17 @@ export class MapPlaylist {
     if (mapInfo?.forcedModifiers) {
       for (const entry of mapInfo.forcedModifiers) {
         const [mod, pctStr] = entry.split(":");
-        const key = mod as ModifierKey;
+        // Stale generated maps can still list removed modifiers until
+        // Maps.gen.ts is regenerated. Ignore those so they do not consume
+        // the three-modifier cap.
+        if (!isModifierKey(mod)) continue;
+        const key = mod;
         const chance = pctStr !== undefined ? parseInt(pctStr, 10) / 100 : 1;
         if (!excludedModifiers.includes(key) && Math.random() < chance) {
           appliedForced.add(key);
           excludedModifiers.push(key);
           // Also exclude mutually-exclusive counterpart(s) so the random pool
-          // can't roll a conflicting modifier (e.g. isNukesDisabled vs isWaterNukes).
+          // can't roll a conflicting modifier.
           for (const [a, b] of MUTUALLY_EXCLUSIVE_MODIFIERS) {
             if (key === a && !excludedModifiers.includes(b))
               excludedModifiers.push(b);
@@ -336,11 +330,7 @@ export class MapPlaylist {
       goldMultiplier,
       isAlliancesDisabled,
       isHardNations,
-      isNukesDisabled,
-      isSAMsDisabled,
       isPeaceTime,
-      isWaterNukes,
-      isDoomsdayClock,
     } = poolResult;
 
     // Apply per-map forced modifiers (already rolled and respecting excludedModifiers).
@@ -353,11 +343,7 @@ export class MapPlaylist {
     if (appliedForced.has("startingGold25M")) startingGold = 25_000_000;
     if (appliedForced.has("goldMultiplier")) goldMultiplier = 2;
     if (appliedForced.has("isAlliancesDisabled")) isAlliancesDisabled = true;
-    if (appliedForced.has("isNukesDisabled")) isNukesDisabled = true;
-    if (appliedForced.has("isSAMsDisabled")) isSAMsDisabled = true;
     if (appliedForced.has("isPeaceTime")) isPeaceTime = true;
-    if (appliedForced.has("isWaterNukes")) isWaterNukes = true;
-    if (appliedForced.has("isDoomsdayClock")) isDoomsdayClock = true;
 
     // Crowded modifier: if the map's biggest player count (first number of calculateMapPlayerCounts) is 60 or lower (small maps),
     // set player count to CROWDED_PLAYER_COUNT (or CROWDED_COMPACT_PLAYER_COUNT if compact map is also enabled)
@@ -375,11 +361,7 @@ export class MapPlaylist {
           startingGold === undefined &&
           goldMultiplier === undefined &&
           !isAlliancesDisabled &&
-          !isNukesDisabled &&
-          !isSAMsDisabled &&
-          !isPeaceTime &&
-          !isWaterNukes &&
-          !isDoomsdayClock
+          !isPeaceTime
         ) {
           excludedModifiers.push("isCrowded");
           const fallback = this.getRandomSpecialGameModifiers(
@@ -392,11 +374,7 @@ export class MapPlaylist {
             startingGold,
             goldMultiplier,
             isAlliancesDisabled,
-            isNukesDisabled,
-            isSAMsDisabled,
             isPeaceTime,
-            isWaterNukes,
-            isDoomsdayClock,
           } = fallback);
           ({ isHardNations } = fallback);
         }
@@ -427,20 +405,7 @@ export class MapPlaylist {
         ? "disabled"
         : "default";
 
-    // Build disabledUnits from modifiers
     const disabledUnits: UnitType[] = [];
-    if (isNukesDisabled) {
-      disabledUnits.push(
-        UnitType.MissileSilo,
-        UnitType.AtomBomb,
-        UnitType.HydrogenBomb,
-        UnitType.MIRV,
-        UnitType.SAMLauncher,
-      );
-    }
-    if (isSAMsDisabled) {
-      disabledUnits.push(UnitType.SAMLauncher);
-    }
 
     // 4min peace = 240s = 2400 ticks
     const peaceTimeDuration = isPeaceTime ? 240 * 10 : undefined;
@@ -460,23 +425,8 @@ export class MapPlaylist {
         startingGold,
         goldMultiplier,
         isAlliancesDisabled,
-        isNukesDisabled,
-        isSAMsDisabled,
         isPeaceTime,
-        isWaterNukes,
-        isDoomsdayClock,
       },
-      // Rolled into the rotation: enable the anti-stall clock at a speed picked
-      // per game so the pacing varies across the presets.
-      doomsdayClock: isDoomsdayClock
-        ? {
-            enabled: true,
-            speed:
-              DOOMSDAY_ROTATION_SPEEDS[
-                Math.floor(Math.random() * DOOMSDAY_ROTATION_SPEEDS.length)
-              ],
-          }
-        : undefined,
       startingGold,
       goldMultiplier,
       disableAlliances: isAlliancesDisabled ? true : undefined,
@@ -497,7 +447,6 @@ export class MapPlaylist {
         peaceTimeDuration ??
         this.getSpawnImmunityDuration(playerTeams, startingGold),
       disabledUnits,
-      waterNukes: isWaterNukes ? true : undefined,
       disableClanTags: mode === GameMode.FFA ? true : undefined,
     } satisfies GameConfig;
   }
@@ -839,11 +788,7 @@ export class MapPlaylist {
             : undefined,
       goldMultiplier: selected.has("goldMultiplier") ? 2 : undefined,
       isAlliancesDisabled: selected.has("isAlliancesDisabled") || undefined,
-      isNukesDisabled: selected.has("isNukesDisabled") || undefined,
-      isSAMsDisabled: selected.has("isSAMsDisabled") || undefined,
       isPeaceTime: selected.has("isPeaceTime") || undefined,
-      isWaterNukes: selected.has("isWaterNukes") || undefined,
-      isDoomsdayClock: selected.has("isDoomsdayClock") || undefined,
     };
   }
 
@@ -914,7 +859,7 @@ export class MapPlaylist {
    * Centralised spawn-immunity duration logic.
    * - HumansVsNations: always 5s (nations can't benefit from longer PVP immunity)
    * - 25M starting gold: 2:30min (extra time to compensate for high gold)
-   * - 5M starting gold: SAM build time + 15s (enough to build a SAM)
+   * - 5M starting gold: 45s
    * - Default: 5s
    */
   private getSpawnImmunityDuration(
@@ -924,8 +869,7 @@ export class MapPlaylist {
     if (playerTeams === HumansVsNations) return 5 * 10;
     if (startingGold !== undefined && startingGold >= 25_000_000)
       return 150 * 10;
-    if (startingGold !== undefined && startingGold >= 5_000_000)
-      return SAM_CONSTRUCTION_TICKS + 15 * 10;
+    if (startingGold !== undefined && startingGold >= 5_000_000) return 45 * 10;
     return 5 * 10;
   }
 

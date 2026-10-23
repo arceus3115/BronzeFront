@@ -17,17 +17,6 @@ describe("SoundEffectController", () => {
   let game: any;
   let controller: SoundEffectController;
 
-  function makeDetonatedWarhead(id: number) {
-    return {
-      id: () => id,
-      type: () => UnitType.MIRVWarhead,
-      isActive: () => false,
-      reachedTarget: () => true,
-      createdAt: () => 0,
-      owner: () => ({}),
-    };
-  }
-
   function tickWithUnits(...us: Array<{ id: () => number }>) {
     tick++;
     units = new Map(us.map((u) => [u.id(), u]));
@@ -51,36 +40,6 @@ describe("SoundEffectController", () => {
     controller = new SoundEffectController(game, eventBus);
   });
 
-  it("plays at most one warhead boom per interval", () => {
-    // 10 warheads detonate on the same tick — one boom.
-    tickWithUnits(
-      ...Array.from({ length: 10 }, (_, i) => makeDetonatedWarhead(i)),
-    );
-    expect(played).toEqual(["atom-hit"]);
-
-    // More warheads land on the next few ticks — still inside the interval.
-    tickWithUnits(makeDetonatedWarhead(20));
-    tickWithUnits(makeDetonatedWarhead(21));
-    expect(played).toEqual(["atom-hit"]);
-
-    // Once the interval has passed, the next detonation booms again.
-    tick += 5;
-    tickWithUnits(makeDetonatedWarhead(30));
-    expect(played).toEqual(["atom-hit", "atom-hit"]);
-  });
-
-  it("does not play a boom for intercepted warheads", () => {
-    const intercepted = {
-      id: () => 1,
-      type: () => UnitType.MIRVWarhead,
-      isActive: () => false,
-      reachedTarget: () => false,
-      createdAt: () => 0,
-      owner: () => ({}),
-    };
-    tickWithUnits(intercepted);
-    expect(played).toEqual([]);
-  });
 
   // createdAt reads `tick` lazily, so the unit counts as created on whichever
   // tick tickWithUnits delivers it.
@@ -139,48 +98,15 @@ describe("SoundEffectController", () => {
     expect(played).toEqual([]);
   });
 
-  it("plays nuke-warning only for nukes inbound to my player", () => {
-    game.myPlayer = () => ({ smallID: () => 7 });
-    game.inSpawnPhase = () => false;
-    game.updatesSinceLastTick = () => ({
-      [GameUpdateType.UnitIncoming]: [
-        { playerID: 7, messageType: MessageType.NUKE_INBOUND },
-        { playerID: 8, messageType: MessageType.HYDROGEN_BOMB_INBOUND },
-        { playerID: 7, messageType: MessageType.NAVAL_INVASION_INBOUND },
-      ],
-    });
-    controller.tick();
-    expect(played).toEqual(["nuke-warning"]);
-  });
-
-  it("does not stack nuke warnings within the throttle interval", () => {
-    game.myPlayer = () => ({ smallID: () => 7 });
-    game.inSpawnPhase = () => false;
-    game.updatesSinceLastTick = () => ({
-      [GameUpdateType.UnitIncoming]: [
-        { playerID: 7, messageType: MessageType.NUKE_INBOUND },
-        { playerID: 7, messageType: MessageType.MIRV_INBOUND },
-      ],
-    });
-    controller.tick();
-    tick += 1;
-    controller.tick();
-    expect(played).toEqual(["nuke-warning"]);
-
-    // Once the interval has passed, the next inbound nuke warns again.
-    tick += 10;
-    controller.tick();
-    expect(played).toEqual(["nuke-warning", "nuke-warning"]);
-  });
 
   it("plays build sounds only for my own factory and transport ship", () => {
     const me = {};
     game.myPlayer = () => me;
     game.inSpawnPhase = () => false;
     tickWithUnits(
-      makeCreatedUnit(1, UnitType.Factory, me),
+      makeCreatedUnit(1, UnitType.Mine, me),
       makeCreatedUnit(2, UnitType.TransportShip, me),
-      makeCreatedUnit(3, UnitType.Factory, {}),
+      makeCreatedUnit(3, UnitType.Mine, {}),
       makeCreatedUnit(4, UnitType.TransportShip, {}),
     );
     expect(played).toEqual(["build-factory", "transport-ship"]);

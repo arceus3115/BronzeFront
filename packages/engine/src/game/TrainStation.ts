@@ -38,6 +38,14 @@ class TradeStationStopHandler implements TrainStopHandler {
         trainExecution.tradeStopsVisited(),
         trainOwner,
       );
+    // A depot that left a farm pays food. One that left a mine pays gold.
+    if (trainExecution.originType() === UnitType.Farm) {
+      if (trainOwner !== stationOwner) {
+        stationOwner.addFood(gold);
+      }
+      trainOwner.addFood(gold);
+      return;
+    }
     // Share revenue with the station owner if it's not the current player
     if (trainOwner !== stationOwner) {
       stationOwner.addGold(gold, station.tile());
@@ -64,7 +72,8 @@ export function createTrainStopHandlers(
   return {
     [UnitType.City]: new TradeStationStopHandler(),
     [UnitType.Port]: new TradeStationStopHandler(),
-    [UnitType.Factory]: new FactoryStopHandler(),
+    [UnitType.Mine]: new FactoryStopHandler(),
+    [UnitType.Farm]: new FactoryStopHandler(),
   };
 }
 

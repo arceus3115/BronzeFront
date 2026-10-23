@@ -50,8 +50,6 @@ export function stubConfig(overrides: Partial<Config> = {}): Config {
   const theme = stubTheme();
   const cfg = {
     theme: () => theme,
-    SAMCooldown: () => 120,
-    SiloCooldown: () => 75,
     deleteUnitCooldown: () => 0,
     spawnImmunityDuration: () => 0,
     nationSpawnImmunityDuration: () => 0,
@@ -59,9 +57,6 @@ export function stubConfig(overrides: Partial<Config> = {}): Config {
     disableAlliances: () => false,
     allianceDuration: () => 100,
     deletionMarkDuration: () => 300,
-    doomsdayClockConfig: () => ({ warnSeconds: 15 }),
-    nukeMagnitudes: () => ({ inner: 0, outer: 0 }),
-    nukeAllianceBreakThreshold: () => 0,
     userSettings: () => ({}),
     ...overrides,
   } as unknown as Config;
@@ -139,9 +134,6 @@ export function makePlayerUpdate(
     // Doomsday-clock state. Present here so the diffPlayerUpdate field-coverage
     // walk in GameUpdateUtils.test.ts reaches these: a field missing from this
     // stub is a field that walk cannot check.
-    inDoomsdayClock: false,
-    markedDoomsdayClockTick: -1,
-    isDecaying: false,
     targets: [],
     outgoingEmojis: [],
     outgoingAttacks: [],
@@ -171,7 +163,6 @@ export function makeUnitUpdate(
     reachedTarget: false,
     targetable: true,
     markedForDeletion: false,
-    missileTimerQueue: [],
     level: 1,
     hasTrainStation: false,
     ...overrides,

@@ -43,7 +43,6 @@ function unit(
     troops: 0,
     health: null,
     targetTile: null,
-    missileTimerQueue: [],
     ...more,
   } as UnitState;
 }
@@ -307,7 +306,7 @@ describe("ReplayGameAdapter", () => {
     // The hovered player has a nuke in flight at the followed player.
     adapter.update(
       withUnits({ ...frame, players }, [
-        unit(1, UnitType.AtomBomb, hovered.smallID(), {
+        unit(1, UnitType.Warship, hovered.smallID(), {
           pos: hoverTile,
           targetTile: ownedBy(followed),
         }),

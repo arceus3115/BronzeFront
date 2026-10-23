@@ -209,8 +209,7 @@ func loadMapInfos() ([]mapInfo, error) {
 			"isRandomSpawn": true, "isCompact": true, "isCrowded": true,
 			"isHardNations": true, "startingGold1M": true, "startingGold5M": true,
 			"startingGold25M": true, "goldMultiplier": true, "isAlliancesDisabled": true,
-			"isNukesDisabled": true, "isSAMsDisabled": true, "isPeaceTime": true,
-			"isWaterNukes": true, "isDoomsdayClock": true,
+			"isPeaceTime": true,
 		}
 		for _, mod := range info.ForcedModifiers {
 			base := mod
@@ -351,8 +350,7 @@ func generateMapsTS(infos []mapInfo) (string, error) {
 	modifierKeys := []string{
 		"isRandomSpawn", "isCompact", "isCrowded", "isHardNations",
 		"startingGold1M", "startingGold5M", "startingGold25M",
-		"goldMultiplier", "isAlliancesDisabled", "isNukesDisabled",
-		"isSAMsDisabled", "isPeaceTime", "isWaterNukes", "isDoomsdayClock",
+		"goldMultiplier", "isAlliancesDisabled", "isPeaceTime",
 	}
 	for i, mk := range modifierKeys {
 		sep := "\n"
@@ -407,8 +405,6 @@ func generateMapsTS(infos []mapInfo) (string, error) {
 	b.WriteString("  id: string;\n")
 	b.WriteString("  /** Whether the layer sits on land or water tiles. */\n")
 	b.WriteString("  placement: LayerPlacement;\n")
-	b.WriteString("  /** If true, the layer is permanently destroyed in nuke impact radii. */\n")
-	b.WriteString("  nukeable?: boolean;\n")
 	b.WriteString("}\n\n")
 
 	b.WriteString("export const maps: readonly MapInfo[] = [\n")
@@ -499,11 +495,7 @@ func generateMapsTS(infos []mapInfo) (string, error) {
 				if i > 0 {
 					b.WriteString(", ")
 				}
-				nukStr := ""
-				if layer.Nukeable {
-					nukStr = ", nukeable: true"
-				}
-				b.WriteString(fmt.Sprintf("{id: %q, placement: %q%s}", layer.ID, layer.Placement, nukStr))
+				b.WriteString(fmt.Sprintf("{id: %q, placement: %q}", layer.ID, layer.Placement))
 			}
 			b.WriteString("],\n")
 		}

@@ -15,10 +15,6 @@ import {
   Structures,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
-import {
-  listNukeBreakAlliance,
-  wouldNukeBreakAlliance,
-} from "@openfront/engine-lib/execution/NukeAlliance";
 import { EventBus } from "@openfront/shared/EventBus";
 import { Controller } from "../Controller";
 import {
@@ -26,8 +22,7 @@ import {
   MouseMoveEvent,
   MouseUpEvent,
 } from "../InputHandler";
-import { buildNukeTrajectory, MapRenderer } from "../render/gl";
-import type { SAMInfo } from "../render/gl/utils/NukeTrajectory";
+import { MapRenderer } from "../render/gl";
 import type { GhostPreviewData } from "../render/types";
 import { TransformHandler } from "../TransformHandler";
 import {
@@ -38,43 +33,9 @@ import { UIState } from "../UIState";
 import { UserSettings } from "../UserSettings";
 import { GameView } from "../view";
 
-/** True for nuke types (AtomBomb, HydrogenBomb): ghost is preserved after placement so user can place multiple or keep selection (Enter/key confirm). */
-export function shouldPreserveGhostAfterBuild(unitType: UnitType): boolean {
-  return unitType === UnitType.AtomBomb || unitType === UnitType.HydrogenBomb;
-}
-
-// tSamIntercept value used to flag an untargetable (impassable) destination:
-// draws the red X marker essentially at the destination while leaving the
-// visible line unchanged (1.0 would mean "no marker").
-const T_BLOCKED_DST = 0.9999;
-
-/**
- * Whether a SAM belongs in the nuke trajectory preview's threat set.
- * Mirrors SAMLauncherExecution: a SAM ignores a nuke whose owner it's
- * friendly with (same team OR allied).
- * Teammates are excluded unconditionally — a strike can break an alliance
- * but never a team relationship, so a teammate's SAM never engages.
- * Allied SAMs are excluded unless the strike would betray that ally — the
- * alliance breaks at launch, so their SAMs will engage the nuke.
- * (Own SAMs never threaten; the caller filters those out first.)
- */
-export function samThreatensNukePreview(
-  samOwnerSmallId: number,
-  teammateSmallIds: ReadonlySet<number>,
-  allySmallIds: ReadonlySet<number>,
-  betrayedSmallIds: ReadonlySet<number>,
-): boolean {
-  if (teammateSmallIds.has(samOwnerSmallId)) return false;
-  return (
-    !allySmallIds.has(samOwnerSmallId) || betrayedSmallIds.has(samOwnerSmallId)
-  );
-}
-
 export class BuildPreviewController implements Controller {
   /** Current ghost (null when no build type is active). */
   private ghostUnit: { buildableUnit: BuildableUnit } | null = null;
-  private readonly connectedAllySmallIds: Set<number> = new Set();
-  private readonly usedSafetyAllies: Set<number> = new Set();
   private readonly mousePos = { x: 0, y: 0 };
   private lastGhostQueryAt: number = 0;
   private pendingConfirm: MouseUpEvent | null = null;
@@ -84,17 +45,6 @@ export class BuildPreviewController implements Controller {
   // continuous instead of stepping tile-to-tile. cursorLoop re-emits each
   // frame with the current cursor world position.
   private lastGhostData: GhostPreviewData | null = null;
-
-  // Static inputs for the nuke trajectory preview (source silo + threatening
-  // SAMs). Recomputed in the throttled renderGhost path; cursorLoop rebuilds
-  // the Bezier each frame with the live cursor position as the destination so
-  // the arc tracks the cursor smoothly instead of snapping tile-to-tile.
-  private nukeTrajectoryStatic: {
-    srcX: number;
-    srcY: number;
-    directionUp: boolean;
-    sams: SAMInfo[];
-  } | null = null;
 
   constructor(
     private game: GameView,
@@ -123,54 +73,26 @@ export class BuildPreviewController implements Controller {
     // place the icon exactly under the cursor.
     const cursorLoop = () => {
       const ghost = this.lastGhostData;
-      const traj = this.nukeTrajectoryStatic;
-      if (ghost !== null || traj !== null) {
+      if (ghost !== null) {
         const w = this.transformHandler.screenToWorldCoordinatesFloat(
           this.mousePos.x,
           this.mousePos.y,
         );
-        if (ghost !== null) {
-          // The range circle (defense post / SAM / nuke radius) normally
-          // follows the cursor, so smooth it the same way as the icon. When
-          // upgrading, the circle is anchored to the existing structure's tile
-          // (stationary, correctly snapped) — leave it alone in that case.
-          const radiusFollowsCursor =
-            !ghost.snapToPlacement &&
-            !(ghost.canUpgrade && ghost.upgradeTargetTile !== null);
-          this.view.updateGhostPreview({
-            ...ghost,
-            tileX: ghost.snapToPlacement ? ghost.tileX : w.x - 0.5,
-            tileY: ghost.snapToPlacement ? ghost.tileY : w.y - 0.5,
-            ...(radiusFollowsCursor
-              ? { radiusTileX: w.x - 0.5, radiusTileY: w.y - 0.5 }
-              : {}),
-          });
-        }
-        if (traj !== null) {
-          // Rebuild the arc with the live cursor as the destination (same
-          // tile-center convention as the icon: shader adds +0.5).
-          const data = buildNukeTrajectory(
-            traj.srcX,
-            traj.srcY,
-            w.x - 0.5,
-            w.y - 0.5,
-            this.game.height(),
-            traj.directionUp,
-            traj.sams,
-          );
-          // Impassable terrain can't be targeted (nukeSpawn rejects it)
-          // even though nukes fly over it — mark the destination with the
-          // blocked X. Checked per frame so the X tracks the live cursor.
-          const tx = Math.floor(w.x);
-          const ty = Math.floor(w.y);
-          if (
-            this.game.isValidCoord(tx, ty) &&
-            this.game.isImpassable(this.game.ref(tx, ty))
-          ) {
-            data.tSamIntercept = Math.min(data.tSamIntercept, T_BLOCKED_DST);
-          }
-          this.view.updateNukeTrajectory(data);
-        }
+        // The range circle (defense post / factory) normally follows the
+        // cursor, so smooth it the same way as the icon. When upgrading, the
+        // circle is anchored to the existing structure's tile (stationary,
+        // correctly snapped) — leave it alone in that case.
+        const radiusFollowsCursor =
+          !ghost.snapToPlacement &&
+          !(ghost.canUpgrade && ghost.upgradeTargetTile !== null);
+        this.view.updateGhostPreview({
+          ...ghost,
+          tileX: ghost.snapToPlacement ? ghost.tileX : w.x - 0.5,
+          tileY: ghost.snapToPlacement ? ghost.tileY : w.y - 0.5,
+          ...(radiusFollowsCursor
+            ? { radiusTileX: w.x - 0.5, radiusTileY: w.y - 0.5 }
+            : {}),
+        });
       }
       requestAnimationFrame(cursorLoop);
     };
@@ -209,50 +131,14 @@ export class BuildPreviewController implements Controller {
     if (now - this.lastGhostQueryAt < 50) return;
     this.lastGhostQueryAt = now;
     let tileRef: TileRef | undefined;
-    let trajectoryTileRef: TileRef | undefined;
     const tile = this.transformHandler.screenToWorldCoordinates(
       this.mousePos.x,
       this.mousePos.y,
     );
     if (this.game.isValidCoord(tile.x, tile.y)) {
       tileRef = this.game.ref(tile.x, tile.y);
-      trajectoryTileRef = tileRef;
-      // Impassable terrain is a void — treat hovering over it the same as
-      // hovering outside the map (no ghost, no blast circle). The nuke
-      // trajectory preview is the exception: nukes fly over impassable
-      // terrain, so the arc still renders (with a blocked X at the
-      // untargetable destination — see cursorLoop).
       if (this.game.isImpassable(tileRef)) {
         tileRef = undefined;
-      }
-    }
-
-    // Check if targeting an ally (for nuke warning visual)
-    let targetingAlly = false;
-    const myPlayer = this.game.myPlayer();
-    const nukeType = this.ghostUnit.buildableUnit.type;
-    if (
-      tileRef &&
-      myPlayer &&
-      (nukeType === UnitType.AtomBomb || nukeType === UnitType.HydrogenBomb)
-    ) {
-      this.connectedAllySmallIds.clear();
-      const allies = myPlayer.allies();
-      for (let i = 0; i < allies.length; i++) {
-        const ally = allies[i];
-        if (!ally.isDisconnected()) {
-          this.connectedAllySmallIds.add(ally.smallID());
-        }
-      }
-
-      if (this.connectedAllySmallIds.size > 0) {
-        targetingAlly = wouldNukeBreakAlliance({
-          game: this.game,
-          targetTile: tileRef,
-          magnitude: this.game.config().nukeMagnitudes(nukeType),
-          allySmallIds: this.connectedAllySmallIds,
-          threshold: this.game.config().nukeAllianceBreakThreshold(),
-        });
       }
     }
 
@@ -262,7 +148,7 @@ export class BuildPreviewController implements Controller {
       .then((buildables) => {
         if (!this.ghostUnit) {
           this.pendingConfirm = null;
-          this.emitGhostPreview(tileRef, targetingAlly, trajectoryTileRef);
+          this.emitGhostPreview(tileRef);
           return;
         }
 
@@ -275,7 +161,7 @@ export class BuildPreviewController implements Controller {
             canUpgrade: false,
           });
           this.pendingConfirm = null;
-          this.emitGhostPreview(tileRef, targetingAlly, trajectoryTileRef);
+          this.emitGhostPreview(tileRef);
           return;
         }
 
@@ -289,7 +175,7 @@ export class BuildPreviewController implements Controller {
           }
         }
 
-        this.emitGhostPreview(tileRef, targetingAlly, trajectoryTileRef);
+        this.emitGhostPreview(tileRef);
       });
   }
 
@@ -299,137 +185,18 @@ export class BuildPreviewController implements Controller {
    * the ghost can't be placed. smoothLoop interpolates displayed position
    * toward the target tile each frame.
    */
-  private emitGhostPreview(
-    tileRef: TileRef | undefined,
-    targetingAlly: boolean,
-    trajectoryTileRef: TileRef | undefined,
-  ): void {
-    const data = this.buildGhostPreviewData(tileRef, targetingAlly);
+  private emitGhostPreview(tileRef: TileRef | undefined): void {
+    const data = this.buildGhostPreviewData(tileRef);
     if (data === null) {
       this.lastGhostData = null;
       this.view.updateGhostPreview(null);
     } else {
       this.lastGhostData = data;
     }
-    // The trajectory target is tracked separately from the ghost tile:
-    // impassable terrain voids the ghost but still gets a trajectory arc.
-    this.updateNukeTrajectoryPreview(trajectoryTileRef);
-  }
-
-  /**
-   * For AtomBomb / HydrogenBomb ghosts, push the Bezier trajectory preview
-   * (closest player-owned silo → target, accounting for non-allied SAMs).
-   * Cleared whenever the ghost isn't a nuke, has no target, or the player
-   * has no silos. Unlike the ghost icon, the trajectory also renders when
-   * hovering impassable terrain (cursorLoop adds the blocked X there).
-   */
-  private updateNukeTrajectoryPreview(tileRef: TileRef | undefined): void {
-    if (!this.ghostUnit || tileRef === undefined) {
-      this.clearNukeTrajectory();
-      return;
-    }
-    const type = this.ghostUnit.buildableUnit.type;
-    if (type !== UnitType.AtomBomb && type !== UnitType.HydrogenBomb) {
-      this.clearNukeTrajectory();
-      return;
-    }
-    const myPlayer = this.game.myPlayer();
-    if (!myPlayer) {
-      this.clearNukeTrajectory();
-      return;
-    }
-
-    // Mirror PlayerImpl.nukeSpawn (the source NukeExecution actually fires
-    // from): only silos that are active, not reloading, and not under
-    // construction are eligible, and the nearest (Manhattan distance) is
-    // chosen. Keeping these in sync prevents the preview arc from
-    // originating from a silo the game wouldn't use.
-    const silos = myPlayer
-      .units(UnitType.MissileSilo)
-      .filter(
-        (u) => u.isActive() && !u.isInCooldown() && !u.isUnderConstruction(),
-      );
-    if (silos.length === 0) {
-      this.clearNukeTrajectory();
-      return;
-    }
-
-    const dstX = this.game.x(tileRef);
-    const dstY = this.game.y(tileRef);
-    silos.sort(
-      (a, b) =>
-        Math.abs(this.game.x(a.tile()) - dstX) +
-        Math.abs(this.game.y(a.tile()) - dstY) -
-        (Math.abs(this.game.x(b.tile()) - dstX) +
-          Math.abs(this.game.y(b.tile()) - dstY)),
-    );
-
-    const bestSilo = silos[0];
-    const directionUp = this.uiState.rocketDirectionUp;
-    const srcX = this.game.x(bestSilo.tile());
-    const srcY = this.game.y(bestSilo.tile());
-
-    // Non-friendly SAMs threaten the trajectory; own + teammate + allied SAMs
-    // don't — except allies this strike would betray: the alliance breaks at
-    // launch (NukeExecution.maybeBreakAlliances), so their SAMs will intercept.
-    // Teammates have no such exception (a strike never breaks a team).
-    // listNukeBreakAlliance is the same function the sim uses there.
-    const teammateIds = new Set<number>();
-    for (const p of this.game.players()) {
-      if (myPlayer.isOnSameTeam(p)) teammateIds.add(p.smallID());
-    }
-    const allyIds = new Set<number>();
-    for (const a of myPlayer.allies()) allyIds.add(a.smallID());
-    const betrayedIds: ReadonlySet<number> =
-      allyIds.size > 0
-        ? listNukeBreakAlliance({
-            game: this.game,
-            targetTile: tileRef,
-            magnitude: this.game.config().nukeMagnitudes(type),
-            threshold: this.game.config().nukeAllianceBreakThreshold(),
-          })
-        : new Set();
-    const sams: SAMInfo[] = [];
-    for (const s of this.game.units(UnitType.SAMLauncher)) {
-      if (!s.isActive()) continue;
-      const owner = s.owner();
-      if (owner === myPlayer) continue;
-      if (
-        !samThreatensNukePreview(
-          owner.smallID(),
-          teammateIds,
-          allyIds,
-          betrayedIds,
-        )
-      ) {
-        continue;
-      }
-      const r = this.game.config().samRange(s.level());
-      sams.push({
-        x: this.game.x(s.tile()),
-        y: this.game.y(s.tile()),
-        r,
-      });
-    }
-
-    // Stash the static inputs; cursorLoop rebuilds the Bezier each frame with
-    // the live cursor as the destination so the arc tracks smoothly.
-    this.nukeTrajectoryStatic = {
-      srcX,
-      srcY,
-      directionUp,
-      sams,
-    };
-  }
-
-  private clearNukeTrajectory(): void {
-    this.nukeTrajectoryStatic = null;
-    this.view.updateNukeTrajectory(null);
   }
 
   private buildGhostPreviewData(
     tileRef: TileRef | undefined,
-    targetingAlly: boolean,
   ): GhostPreviewData | null {
     if (!this.ghostUnit) return null;
     if (tileRef === undefined) return null;
@@ -454,20 +221,10 @@ export class BuildPreviewController implements Controller {
       upgradeTargetTile = this.game.unit(u.canUpgrade)?.tile() ?? null;
     }
 
-    // Range circle: SAM placement preview shows targetable radius; nuke
-    // previews show the outer blast radius at the target tile.
     let rangeRadius = 0;
     switch (u.type) {
-      case UnitType.SAMLauncher: {
-        const level = this.resolveGhostRangeLevel(u) ?? 1;
-        rangeRadius = this.game.config().samRange(level);
-        break;
-      }
-      case UnitType.AtomBomb:
-      case UnitType.HydrogenBomb:
-        rangeRadius = this.game.config().nukeMagnitudes(u.type).outer;
-        break;
-      case UnitType.Factory:
+      case UnitType.Mine:
+      case UnitType.Farm:
         rangeRadius = this.game.config().trainStationMaxRange();
         break;
       case UnitType.DefensePost:
@@ -485,18 +242,9 @@ export class BuildPreviewController implements Controller {
       radiusTileY = this.game.y(upgradeTargetTile);
     }
 
-    const isNuke = u.type === UnitType.AtomBomb;
     const multiplier =
-      u.canUpgrade !== false || isNuke
-        ? (this.uiState.upgradeMultiplier ?? 1)
-        : 1;
+      u.canUpgrade !== false ? (this.uiState.upgradeMultiplier ?? 1) : 1;
     const cost = bulkCost(u, multiplier);
-    // Drives the red cost label: gold short of the bulk total, or (for
-    // bombs) fewer loaded silo tubes than the selected amount.
-    let canAfford = myPlayer.gold() >= cost;
-    if (isNuke) {
-      canAfford &&= myPlayer.readyMissileCount() >= multiplier;
-    }
     return {
       ghostType: u.type,
       tileX: this.game.x(placementTile),
@@ -509,13 +257,13 @@ export class BuildPreviewController implements Controller {
       cost: Number(cost),
       multiplier: multiplier,
       showCost: this.userSettings.cursorCostLabel(),
-      canAfford,
+      canAfford: myPlayer.gold() >= cost,
       ghostRailPaths: u.ghostRailPaths,
       overlappingRailroads: u.overlappingRailroads,
       ownerID: myPlayer.smallID(),
       upgradeTargetTile,
       rangeRadius,
-      rangeWarning: targetingAlly,
+      rangeWarning: false,
     };
   }
 
@@ -560,87 +308,11 @@ export class BuildPreviewController implements Controller {
       if (!this.game.isValidCoord(tile.x, tile.y)) return;
       const unitType = this.ghostUnit.buildableUnit.type;
       const targetTile = this.game.ref(tile.x, tile.y);
-
-      if (this.shouldBlockRecentAllyNuke(targetTile, unitType)) {
-        return;
-      }
-
-      const isNuke = unitType === UnitType.AtomBomb;
-      const rocketDirectionUp =
-        unitType === UnitType.AtomBomb || unitType === UnitType.HydrogenBomb
-          ? this.uiState.rocketDirectionUp
-          : undefined;
-      this.eventBus.emit(
-        new BuildUnitIntentEvent(
-          unitType,
-          targetTile,
-          rocketDirectionUp,
-          isNuke ? this.uiState.upgradeMultiplier || 1 : undefined,
-        ),
-      );
-      if (!shouldPreserveGhostAfterBuild(unitType)) {
-        this.removeGhostStructure();
-      }
+      this.eventBus.emit(new BuildUnitIntentEvent(unitType, targetTile));
+      this.removeGhostStructure();
     } else {
       this.removeGhostStructure();
     }
-  }
-
-  private shouldBlockRecentAllyNuke(
-    tile: TileRef,
-    unitType: UnitType,
-  ): boolean {
-    const duration = this.userSettings.nukeAllianceSafetyDuration();
-    if (
-      duration <= 0 ||
-      (unitType !== UnitType.AtomBomb &&
-        unitType !== UnitType.HydrogenBomb &&
-        unitType !== UnitType.MIRV)
-    ) {
-      return false;
-    }
-
-    const alliances = this.game.myPlayer()?.alliances();
-    if (!alliances?.length) return false;
-
-    const currentTick = this.game.ticks();
-    const freshAllies = new Map<number, number>();
-    for (const a of alliances) {
-      if (
-        !this.usedSafetyAllies.has(a.id) &&
-        currentTick - a.createdAt <= duration
-      ) {
-        freshAllies.set(this.game.player(a.other).smallID(), a.id);
-      }
-    }
-    if (freshAllies.size === 0) return false;
-
-    const broken =
-      unitType === UnitType.MIRV
-        ? [this.game.ownerID(tile)]
-        : listNukeBreakAlliance({
-            game: this.game,
-            targetTile: tile,
-            magnitude: this.game.config().nukeMagnitudes(unitType),
-            threshold: this.game.config().nukeAllianceBreakThreshold(),
-          });
-
-    let blocked = false;
-    for (const smallId of broken) {
-      const allianceId = freshAllies.get(smallId);
-      if (allianceId !== undefined) {
-        this.usedSafetyAllies.add(allianceId);
-        blocked = true;
-      }
-    }
-
-    if (blocked) {
-      this.view.triggerBlockedFlash(
-        this.game.x(tile) + 0.5,
-        this.game.y(tile) + 0.5,
-      );
-    }
-    return blocked;
   }
 
   private moveGhost(e: MouseMoveEvent) {
@@ -668,26 +340,10 @@ export class BuildPreviewController implements Controller {
     this.ghostUnit = null;
     this.lastGhostData = null;
     this.view.updateGhostPreview(null);
-    this.clearNukeTrajectory();
   }
 
   private removeGhostStructure() {
     this.clearGhostStructure();
     this.uiState.ghostStructure = null;
-  }
-
-  private resolveGhostRangeLevel(
-    buildableUnit: BuildableUnit,
-  ): number | undefined {
-    if (buildableUnit.type !== UnitType.SAMLauncher) return undefined;
-    if (buildableUnit.canUpgrade !== false) {
-      const existing = this.game.unit(buildableUnit.canUpgrade);
-      if (existing) {
-        return existing.level() + 1;
-      } else {
-        console.warn("Failed to find existing SAMLauncher for upgrade");
-      }
-    }
-    return 1;
   }
 }

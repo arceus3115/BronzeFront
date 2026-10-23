@@ -74,9 +74,8 @@ import { CameraGestures, ReplayCamera } from "./ReplayCamera";
 import { formatGameTime, timelineFrames } from "./ReplayControls";
 import { classicReplayHref, versionedViewerUrl } from "./ReplayEntry";
 import { ReplayGameView } from "./ReplayGameAdapter";
-import { ReplayNukedLayers } from "./ReplayNukedLayers";
 import type { ReplayPalette } from "./ReplayPalette";
-import { ReplayPlayback, TICKS_PER_SECOND } from "./ReplayPlayback";
+import { ReplayPlayback } from "./ReplayPlayback";
 import { fetchReplayRecord, hasRecordedHashes } from "./ReplayRecord";
 import "./ReplayStatus";
 import type { Preparing } from "./ReplayStatus";
@@ -106,8 +105,6 @@ async function openPlayback(
   );
   const playback = await ReplayPlayback.open(source, gunzipInBrowser, {
     allianceDuration: config.allianceDuration(),
-    doomsdayClockWarnTicks:
-      config.doomsdayClockConfig().warnSeconds * TICKS_PER_SECOND,
   });
   return { config, playback };
 }
@@ -468,13 +465,7 @@ export class ReplayViewer extends LitElement {
     this.camera = camera;
     this.gestures = new CameraGestures(camera);
 
-    const nukedLayers = new ReplayNukedLayers(
-      terrain.layers ?? [],
-      header.mapWidth * header.mapHeight,
-      header.nukeImpacts,
-      view,
-    );
-    this.bindPlayback(playback, view, replayTerrain, nukedLayers, adapter);
+    this.bindPlayback(playback, view, replayTerrain, adapter);
     this.playback = playback;
     // A restored context is a new renderer, so add the players and state again.
     view.onContextRestored = () => {
@@ -504,7 +495,6 @@ export class ReplayViewer extends LitElement {
     playback: ReplayPlayback,
     view: MapRenderer,
     replayTerrain: ReplayTerrain,
-    nukedLayers: ReplayNukedLayers,
     adapter: ReplayGameView,
   ): void {
     const mapWidth = playback.header.mapWidth;
@@ -518,8 +508,6 @@ export class ReplayViewer extends LitElement {
         );
         view.applyTerrainRects(rects, bytes);
       }
-      if (seeked) nukedLayers.seek(fd.tick);
-      else nukedLayers.advance(fd.tick);
       uploadFrameData(view, fd);
       // Snap names after a seek instead of animating them there.
       if (seeked) {

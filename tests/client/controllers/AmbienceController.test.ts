@@ -39,7 +39,7 @@ describe("AmbienceController", () => {
   });
 
   it("emits the nearest structure's ambience when zoomed in", () => {
-    nearby = [structure(UnitType.Factory, 9), structure(UnitType.City, 4)];
+    nearby = [structure(UnitType.Mine, 9), structure(UnitType.City, 4)];
     controller.tick();
     expect(emitted).toEqual(["city"]);
   });
@@ -51,20 +51,6 @@ describe("AmbienceController", () => {
     expect(emitted).toEqual([]);
   });
 
-  it("clears the ambience when no structure is near anymore", () => {
-    nearby = [structure(UnitType.SAMLauncher, 4)];
-    controller.tick();
-    nearby = [];
-    controller.tick();
-    expect(emitted).toEqual(["sam-silo", null]);
-  });
-
-  it("does not re-emit an unchanged track", () => {
-    nearby = [structure(UnitType.MissileSilo, 4)];
-    controller.tick();
-    controller.tick();
-    expect(emitted).toEqual(["missile-silo"]);
-  });
 
   describe("zoom envelope", () => {
     // The sound designer asked for -20 dB below the cues at the deepest zoom,

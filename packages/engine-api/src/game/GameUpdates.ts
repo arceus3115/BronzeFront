@@ -6,10 +6,8 @@ import {
   Gold,
   MessageType,
   NameViewData,
-  NukeState,
   PlayerID,
   PlayerType,
-  SamLauncherState,
   Team,
   Tick,
   TrainType,
@@ -67,12 +65,6 @@ export interface GameUpdateViewData {
   playerNameViewData?: Record<string, NameViewData>;
   tickExecutionDuration?: number;
   pendingTurns?: number;
-  /**
-   * Packed tile refs that were inside a nuke blast radius this tick.
-   * Used by the renderer to mark nukeable layer tiles as destroyed.
-   * Absent when no nukes detonated.
-   */
-  packedNukeImpacts?: Uint32Array;
 }
 
 /**
@@ -199,19 +191,16 @@ export interface UnitUpdate {
   reachedTarget: boolean;
   warshipState?: WarshipState;
   transportShipState?: TransportShipState;
-  nukeState?: NukeState;
   targetable: boolean;
   markedForDeletion: number | false;
   targetUnitId?: number; // Only for trade ships
-  targetTile?: TileRef; // Only for nukes
+  targetTile?: TileRef;
   health?: number;
   underConstruction?: boolean;
-  missileTimerQueue: number[];
   level: number;
   hasTrainStation: boolean;
   trainType?: TrainType; // Only for trains
   loaded?: boolean; // Only for trains
-  samUpgrade?: SamLauncherState;
 }
 
 export interface AttackUpdate {
@@ -252,6 +241,11 @@ export interface PlayerUpdate {
   deathPosition?: number | null;
   tilesOwned?: number;
   gold?: Gold;
+  /** Food delivered by depots that left a farm, plus land yield. */
+  food?: Gold;
+  science?: Gold;
+  bronzeWeapons?: boolean;
+  markets?: boolean;
   /** Cumulative ship-trade revenue (changes only on arrivals, so it diffs). */
   tradeGold?: Gold;
   /** Cumulative train revenue: own trains + external stops at own stations. */
@@ -265,9 +259,6 @@ export interface PlayerUpdate {
   embargoes?: Set<PlayerID>;
   isTraitor?: boolean;
   traitorRemainingTicks?: number;
-  inDoomsdayClock?: boolean;
-  isDecaying?: boolean;
-  markedDoomsdayClockTick?: number;
   targets?: number[];
   outgoingEmojis?: EmojiMessage[];
   outgoingAttacks?: AttackUpdate[];

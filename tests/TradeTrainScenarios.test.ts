@@ -425,7 +425,7 @@ async function runTrainScenario(s: TrainScenario): Promise<TrainMetrics> {
     build(game, a, UnitType.City, x, y);
   }
   for (const [x, y] of s.factories) {
-    const factory = build(game, a, UnitType.Factory, x, y);
+    const factory = build(game, a, UnitType.Mine, x, y);
     // The real spawner: creates the factory's own (train-spawning) station
     // and stations for every structure in range.
     game.addExecution(new FactoryExecution(factory));
@@ -435,7 +435,7 @@ async function runTrainScenario(s: TrainScenario): Promise<TrainMetrics> {
   const trainIds = new Set<number>();
   for (let i = 0; i < s.ticks; i++) {
     game.executeNextTick();
-    for (const u of game.units(UnitType.Train)) {
+    for (const u of game.units(UnitType.Depot)) {
       trainIds.add(u.id());
     }
   }

@@ -29,11 +29,10 @@ const EDITABLE: { [K in keyof GameConfig]?: GameConfig[K] } = {
   instantBuild: true,
   randomSpawn: true,
   gameMode: GameMode.Team,
-  disabledUnits: [UnitType.AtomBomb],
+  disabledUnits: [UnitType.City],
   playerTeams: 3,
   allowedPublicIds: ["pub-a"],
   trusted: true,
-  doomsdayClock: { enabled: true, speed: "fast" },
   overtime: { enabled: true, startMinutes: 20 },
   anonymizeNames: true,
   nameReveals: ["c1000000"],
@@ -49,7 +48,6 @@ const NULLABLE: { [K in keyof GameConfig]?: NonNullable<GameConfig[K]> } = {
   startingGold: 1000,
   disableAlliances: true,
   customAllianceDuration: 5,
-  waterNukes: true,
 };
 
 describe("applyGameConfigPatch", () => {

@@ -100,14 +100,14 @@ describe("Nation economy at the start", () => {
     },
   );
 
-  it("a landlocked nation builds a factory first there", () => {
+  it("a landlocked nation builds a farm first there", () => {
     const { nation, behavior, built } = setupCoast(
       { difficulty: Difficulty.Hard, gameMode: team },
       { spawnAreas: true, landlocked: true },
     );
     nation.addGold(200_000n);
     behavior.handleStructures();
-    expect(built()).toEqual([UnitType.Factory]);
+    expect(built()).toEqual([UnitType.Farm]);
   });
 
   it.each([
@@ -129,7 +129,7 @@ describe("Nation economy at the start", () => {
   it.each([
     [Difficulty.Hard, ffa, [UnitType.City]],
     [Difficulty.Hard, team, [UnitType.Port]],
-    [Difficulty.Easy, ffa, []],
+    [Difficulty.Easy, ffa, [UnitType.City]],
   ])(
     "%s %s: with one city and 300k gold builds %j",
     (difficulty, gameMode, expected) => {
@@ -177,15 +177,15 @@ describe("Nation economy at the start", () => {
     },
   );
 
-  // Real city costs: 500k for the third, 1M from the fourth on. Harder nations start saving
-  // later and inflate cities less while they do.
+  // Real city costs: 500k for the third, 1M from the fourth on. There is no stockpile
+  // inflating the price.
   it.each([
     [Difficulty.Medium, 2, 500_000n],
-    [Difficulty.Medium, 4, 4_200_000n],
+    [Difficulty.Medium, 4, 1_000_000n],
     [Difficulty.Hard, 3, 1_000_000n],
-    [Difficulty.Hard, 4, 3_400_000n],
+    [Difficulty.Hard, 4, 1_000_000n],
     [Difficulty.Impossible, 4, 1_000_000n],
-    [Difficulty.Impossible, 5, 3_000_000n],
+    [Difficulty.Impossible, 5, 1_000_000n],
   ])(
     "%s: with %i cities the next one feels like %i",
     (difficulty, owned, perceived) => {
@@ -199,14 +199,13 @@ describe("Nation economy at the start", () => {
     },
   );
 
-  // A MIRV and a hydrogen bomb cost 30M: Hard saves for it within 5 minutes of income, Impossible
-  // within 6, and income earned so far counts twice as the current rate
+  // Income no longer inflates the city price; the next city is its real cost.
   it.each([
-    [Difficulty.Medium, 4, 0n, 4_200_000n],
+    [Difficulty.Medium, 4, 0n, 1_000_000n],
     [Difficulty.Hard, 4, 2_900_000n, 1_000_000n],
-    [Difficulty.Hard, 4, 3_000_000n, 3_400_000n],
+    [Difficulty.Hard, 4, 3_000_000n, 1_000_000n],
     [Difficulty.Impossible, 5, 2_400_000n, 1_000_000n],
-    [Difficulty.Impossible, 5, 2_500_000n, 3_000_000n],
+    [Difficulty.Impossible, 5, 2_500_000n, 1_000_000n],
   ])(
     "%s: with %i cities and %i gold earned in the first minute, the next city feels like %i",
     (difficulty, owned, income, perceived) => {
@@ -220,10 +219,10 @@ describe("Nation economy at the start", () => {
     },
   );
 
-  // Cities disabled: about one city per 2000 tiles. The second port costs 250k, 400k while saving
+  // Cities disabled: about one city per 2000 tiles. The second port costs 250k.
   it.each([
     [100, 2_500, 250_000n],
-    [200, 10_000, 400_000n],
+    [200, 10_000, 250_000n],
   ])(
     "without cities, on a %i-wide map (%i tiles) the second port feels like %i",
     (size, tiles, perceived) => {
@@ -247,44 +246,7 @@ describe("Nation economy at the start", () => {
 describe("Nation structure upgrades", () => {
   const ffa = GameMode.FFA;
 
-  // A SAM at (10, 20) with the test config's range of 20, a city it covers, and `other`
-  function withSam(difficulty: Difficulty, other: [UnitType, number, number]) {
-    const setup = setupCoast({ difficulty, gameMode: ffa }, { size: 200 });
-    const { game, nation } = setup;
-    const sam = nation.buildUnit(UnitType.SAMLauncher, game.ref(10, 20), {});
-    nation.buildUnit(UnitType.City, game.ref(10, 30), {});
-    nation.buildUnit(other[0], game.ref(other[1], other[2]), {});
-    nation.addGold(10_000_000n);
-    return { ...setup, sam };
-  }
-
-  it.each([Difficulty.Hard, Difficulty.Impossible])(
-    "%s upgrades its SAM instead of building one when it already covers every structure",
-    (difficulty) => {
-      const { behavior, sam, built, upgraded } = withSam(difficulty, [
-        UnitType.Factory,
-        20,
-        25,
-      ]);
-      expect(behavior["maybeSpawnStructure"](UnitType.SAMLauncher)).toBe(true);
-      expect(upgraded()).toEqual([sam.id()]);
-      expect(built()).toEqual([]);
-    },
-  );
-
-  it.each([
-    ["a city is out of SAM range", Difficulty.Hard, UnitType.City, 10, 190],
-    ["a port is out of SAM range", Difficulty.Hard, UnitType.Port, 49, 25],
-    ["Easy", Difficulty.Easy, UnitType.Factory, 20, 25],
-  ])("builds another SAM when %s", (_, difficulty, type, x, y) => {
-    const { behavior, built, upgraded } = withSam(difficulty, [type, x, y]);
-    expect(behavior["maybeSpawnStructure"](UnitType.SAMLauncher)).toBe(true);
-    expect(built()).toEqual([UnitType.SAMLauncher]);
-    expect(upgraded()).toEqual([]);
-  });
-
-  // Ports are due (cities disabled: one city per 2000 tiles), and nothing else is. Without silos
-  // the nation saves up for a SAM (1.5M).
+  // Ports are due (cities disabled: one city per 2000 tiles), and nothing else is.
   function withPort(
     difficulty: Difficulty,
     { shortCoast, gold = 5_000_000n }: { shortCoast: boolean; gold?: bigint },
@@ -293,7 +255,7 @@ describe("Nation structure upgrades", () => {
       {
         difficulty,
         gameMode: ffa,
-        disabledUnits: [UnitType.City, UnitType.Factory, UnitType.MissileSilo],
+        disabledUnits: [UnitType.City, UnitType.Mine],
       },
       { size: 200 },
     );
@@ -330,7 +292,7 @@ describe("Nation structure upgrades", () => {
   // The next port levels cost 250k, 500k, then 1M each. With four city equivalents the nation
   // wants three ports, so two more levels.
   it.each([
-    ["what the gold beyond the 1.5M savings pays for", 2_000_000n, 1],
+    ["what 2M gold pays for, capped by the port ratio", 2_000_000n, 2],
     ["what the port ratio asks for", 1_000_000_000n, 2],
   ])("upgrades its port by %s", (_, gold, levels) => {
     const { game, behavior, port } = withPort(Difficulty.Hard, {
@@ -344,7 +306,6 @@ describe("Nation structure upgrades", () => {
   });
 
   // Two cities and a port leave nothing else due, and are dense enough to upgrade a city.
-  // The nation saves up 30M for a MIRV and a hydrogen bomb.
   function withCities(difficulty: Difficulty) {
     const setup = setupCoast({ difficulty, gameMode: ffa });
     const { game, nation, cities } = setup;
@@ -368,12 +329,11 @@ describe("Nation structure upgrades", () => {
   });
 
   it.each([Difficulty.Hard, Difficulty.Impossible])(
-    "%s spends everything beyond its savings on city levels at once",
+    "%s spends its gold on city levels at once",
     (difficulty) => {
       const { nation, cityLevels } = withCities(difficulty);
       expect(cityLevels).toBeGreaterThan(900);
-      expect(nation.gold()).toBeGreaterThanOrEqual(30_000_000n);
-      expect(nation.gold()).toBeLessThan(31_000_000n);
+      expect(nation.gold()).toBeLessThan(1_000_000n);
     },
   );
 
@@ -397,18 +357,3 @@ describe("Nation structure upgrades", () => {
 });
 
 // After first saving up a MIRV and a hydrogen bomb (30M), structures pause every other 15s
-describe("Nation structure pauses after saving up", () => {
-  it.each([
-    [40_000_000n, true],
-    [60_000_000n, false],
-  ])("with %i gold, pauses: %s", (gold, paused) => {
-    const { game, nation, behavior } = setupCoast({
-      difficulty: Difficulty.Hard,
-      gameMode: GameMode.FFA,
-    });
-    nation.addGold(gold);
-    expect(behavior["isInPostSaveUpBlockedPhase"]()).toBe(false);
-    behavior["_postSaveUpStartTick"] = game.ticks() - 150;
-    expect(behavior["isInPostSaveUpBlockedPhase"]()).toBe(paused);
-  });
-});

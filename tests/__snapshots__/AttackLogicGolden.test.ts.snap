@@ -1647,25 +1647,15 @@ exports[`attackLogic golden values > player vs player: situational modifiers 1`]
     "defenderLoss": 5,
     "tickFraction": 0.0154204,
   },
-  "defense post + fallout + traitor (stacking)": {
-    "attackerLoss": 578.363,
+  "defense post + traitor (stacking)": {
+    "attackerLoss": 144.591,
     "defenderLoss": 5,
-    "tickFraction": 0.28037,
+    "tickFraction": 0.0700926,
   },
   "disconnected teammate": {
     "attackerLoss": 0,
     "defenderLoss": 5,
     "tickFraction": 0.0192755,
-  },
-  "fallout 10%": {
-    "attackerLoss": 185.076,
-    "defenderLoss": 5,
-    "tickFraction": 0.0925222,
-  },
-  "fallout 100%": {
-    "attackerLoss": 115.673,
-    "defenderLoss": 5,
-    "tickFraction": 0.0578264,
   },
   "human attacks bot": {
     "attackerLoss": 26.9903,
@@ -1674,11 +1664,6 @@ exports[`attackLogic golden values > player vs player: situational modifiers 1`]
   },
   "nation attacks bot": {
     "attackerLoss": 26.9903,
-    "defenderLoss": 5,
-    "tickFraction": 0.0192755,
-  },
-  "no fallout": {
-    "attackerLoss": 38.5576,
     "defenderLoss": 5,
     "tickFraction": 0.0192755,
   },
@@ -3367,303 +3352,153 @@ exports[`attackLogic golden values > player vs player: troop ratio clamps 1`] = 
 
 exports[`attackLogic golden values > player vs terra nullius 1`] = `
 {
-  "Highland BOT attack=100 fallout=0": {
+  "Highland BOT attack=100": {
     "attackerLoss": 10,
     "defenderLoss": 0,
     "tickFraction": 0.5,
   },
-  "Highland BOT attack=100 fallout=0.5": {
-    "attackerLoss": 40,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Highland BOT attack=1000 fallout=0": {
+  "Highland BOT attack=1000": {
     "attackerLoss": 10,
     "defenderLoss": 0,
     "tickFraction": 0.2,
   },
-  "Highland BOT attack=1000 fallout=0.5": {
-    "attackerLoss": 40,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Highland BOT attack=10000 fallout=0": {
+  "Highland BOT attack=10000": {
     "attackerLoss": 10,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Highland BOT attack=10000 fallout=0.5": {
-    "attackerLoss": 40,
-    "defenderLoss": 0,
-    "tickFraction": 0.08,
-  },
-  "Highland BOT attack=100000 fallout=0": {
+  "Highland BOT attack=100000": {
     "attackerLoss": 10,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Highland BOT attack=100000 fallout=0.5": {
-    "attackerLoss": 40,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Highland BOT attack=1000000 fallout=0": {
+  "Highland BOT attack=1000000": {
     "attackerLoss": 10,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Highland BOT attack=1000000 fallout=0.5": {
-    "attackerLoss": 40,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Highland HUMAN attack=100 fallout=0": {
+  "Highland HUMAN attack=100": {
     "attackerLoss": 20,
     "defenderLoss": 0,
     "tickFraction": 0.5,
   },
-  "Highland HUMAN attack=100 fallout=0.5": {
-    "attackerLoss": 80,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Highland HUMAN attack=1000 fallout=0": {
+  "Highland HUMAN attack=1000": {
     "attackerLoss": 20,
     "defenderLoss": 0,
     "tickFraction": 0.2,
   },
-  "Highland HUMAN attack=1000 fallout=0.5": {
-    "attackerLoss": 80,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Highland HUMAN attack=10000 fallout=0": {
+  "Highland HUMAN attack=10000": {
     "attackerLoss": 20,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Highland HUMAN attack=10000 fallout=0.5": {
-    "attackerLoss": 80,
-    "defenderLoss": 0,
-    "tickFraction": 0.08,
-  },
-  "Highland HUMAN attack=100000 fallout=0": {
+  "Highland HUMAN attack=100000": {
     "attackerLoss": 20,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Highland HUMAN attack=100000 fallout=0.5": {
-    "attackerLoss": 80,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Highland HUMAN attack=1000000 fallout=0": {
+  "Highland HUMAN attack=1000000": {
     "attackerLoss": 20,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Highland HUMAN attack=1000000 fallout=0.5": {
-    "attackerLoss": 80,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Mountain BOT attack=100 fallout=0": {
+  "Mountain BOT attack=100": {
     "attackerLoss": 12,
     "defenderLoss": 0,
     "tickFraction": 0.5,
   },
-  "Mountain BOT attack=100 fallout=0.5": {
-    "attackerLoss": 48,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Mountain BOT attack=1000 fallout=0": {
+  "Mountain BOT attack=1000": {
     "attackerLoss": 12,
     "defenderLoss": 0,
     "tickFraction": 0.25,
   },
-  "Mountain BOT attack=1000 fallout=0.5": {
-    "attackerLoss": 48,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Mountain BOT attack=10000 fallout=0": {
+  "Mountain BOT attack=10000": {
     "attackerLoss": 12,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Mountain BOT attack=10000 fallout=0.5": {
-    "attackerLoss": 48,
-    "defenderLoss": 0,
-    "tickFraction": 0.1,
-  },
-  "Mountain BOT attack=100000 fallout=0": {
+  "Mountain BOT attack=100000": {
     "attackerLoss": 12,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Mountain BOT attack=100000 fallout=0.5": {
-    "attackerLoss": 48,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Mountain BOT attack=1000000 fallout=0": {
+  "Mountain BOT attack=1000000": {
     "attackerLoss": 12,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Mountain BOT attack=1000000 fallout=0.5": {
-    "attackerLoss": 48,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Mountain HUMAN attack=100 fallout=0": {
+  "Mountain HUMAN attack=100": {
     "attackerLoss": 24,
     "defenderLoss": 0,
     "tickFraction": 0.5,
   },
-  "Mountain HUMAN attack=100 fallout=0.5": {
-    "attackerLoss": 96,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Mountain HUMAN attack=1000 fallout=0": {
+  "Mountain HUMAN attack=1000": {
     "attackerLoss": 24,
     "defenderLoss": 0,
     "tickFraction": 0.25,
   },
-  "Mountain HUMAN attack=1000 fallout=0.5": {
-    "attackerLoss": 96,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Mountain HUMAN attack=10000 fallout=0": {
+  "Mountain HUMAN attack=10000": {
     "attackerLoss": 24,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Mountain HUMAN attack=10000 fallout=0.5": {
-    "attackerLoss": 96,
-    "defenderLoss": 0,
-    "tickFraction": 0.1,
-  },
-  "Mountain HUMAN attack=100000 fallout=0": {
+  "Mountain HUMAN attack=100000": {
     "attackerLoss": 24,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Mountain HUMAN attack=100000 fallout=0.5": {
-    "attackerLoss": 96,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Mountain HUMAN attack=1000000 fallout=0": {
+  "Mountain HUMAN attack=1000000": {
     "attackerLoss": 24,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Mountain HUMAN attack=1000000 fallout=0.5": {
-    "attackerLoss": 96,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Plains BOT attack=100 fallout=0": {
+  "Plains BOT attack=100": {
     "attackerLoss": 8,
     "defenderLoss": 0,
     "tickFraction": 0.5,
   },
-  "Plains BOT attack=100 fallout=0.5": {
-    "attackerLoss": 32,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Plains BOT attack=1000 fallout=0": {
+  "Plains BOT attack=1000": {
     "attackerLoss": 8,
     "defenderLoss": 0,
     "tickFraction": 0.165,
   },
-  "Plains BOT attack=1000 fallout=0.5": {
-    "attackerLoss": 32,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Plains BOT attack=10000 fallout=0": {
+  "Plains BOT attack=10000": {
     "attackerLoss": 8,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Plains BOT attack=10000 fallout=0.5": {
-    "attackerLoss": 32,
-    "defenderLoss": 0,
-    "tickFraction": 0.066,
-  },
-  "Plains BOT attack=100000 fallout=0": {
+  "Plains BOT attack=100000": {
     "attackerLoss": 8,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Plains BOT attack=100000 fallout=0.5": {
-    "attackerLoss": 32,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Plains BOT attack=1000000 fallout=0": {
+  "Plains BOT attack=1000000": {
     "attackerLoss": 8,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Plains BOT attack=1000000 fallout=0.5": {
-    "attackerLoss": 32,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Plains HUMAN attack=100 fallout=0": {
+  "Plains HUMAN attack=100": {
     "attackerLoss": 16,
     "defenderLoss": 0,
     "tickFraction": 0.5,
   },
-  "Plains HUMAN attack=100 fallout=0.5": {
-    "attackerLoss": 64,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Plains HUMAN attack=1000 fallout=0": {
+  "Plains HUMAN attack=1000": {
     "attackerLoss": 16,
     "defenderLoss": 0,
     "tickFraction": 0.165,
   },
-  "Plains HUMAN attack=1000 fallout=0.5": {
-    "attackerLoss": 64,
-    "defenderLoss": 0,
-    "tickFraction": 0.5,
-  },
-  "Plains HUMAN attack=10000 fallout=0": {
+  "Plains HUMAN attack=10000": {
     "attackerLoss": 16,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Plains HUMAN attack=10000 fallout=0.5": {
-    "attackerLoss": 64,
-    "defenderLoss": 0,
-    "tickFraction": 0.066,
-  },
-  "Plains HUMAN attack=100000 fallout=0": {
+  "Plains HUMAN attack=100000": {
     "attackerLoss": 16,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },
-  "Plains HUMAN attack=100000 fallout=0.5": {
-    "attackerLoss": 64,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Plains HUMAN attack=1000000 fallout=0": {
+  "Plains HUMAN attack=1000000": {
     "attackerLoss": 16,
-    "defenderLoss": 0,
-    "tickFraction": 0.025,
-  },
-  "Plains HUMAN attack=1000000 fallout=0.5": {
-    "attackerLoss": 64,
     "defenderLoss": 0,
     "tickFraction": 0.025,
   },

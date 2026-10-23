@@ -2,22 +2,6 @@ import { zb, ZbEncodeError } from "@openfront/zbin";
 import { z } from "zod";
 import { UnitType } from "./game/GameTypes";
 
-export const bombUnits = ["abomb", "hbomb", "mirv", "mirvw"] as const;
-export const BombUnitSchema = z.enum(bombUnits);
-export type BombUnit = z.infer<typeof BombUnitSchema>;
-export type NukeType =
-  | UnitType.AtomBomb
-  | UnitType.HydrogenBomb
-  | UnitType.MIRV
-  | UnitType.MIRVWarhead;
-
-export const unitTypeToBombUnit = {
-  [UnitType.AtomBomb]: "abomb",
-  [UnitType.HydrogenBomb]: "hbomb",
-  [UnitType.MIRV]: "mirv",
-  [UnitType.MIRVWarhead]: "mirvw",
-} as const satisfies Record<NukeType, BombUnit>;
-
 export const boatUnits = ["trade", "trans"] as const;
 export const BoatUnitSchema = z.enum(boatUnits);
 export type BoatUnit = z.infer<typeof BoatUnitSchema>;
@@ -28,34 +12,24 @@ export const unitTypeToBoatUnit = {
   [UnitType.TransportShip]: "trans",
 } as const satisfies Record<BoatUnitType, BoatUnit>;
 
-export const otherUnits = [
-  "city",
-  "defp",
-  "port",
-  "wshp",
-  "silo",
-  "saml",
-  "fact",
-] as const;
+export const otherUnits = ["city", "defp", "port", "wshp", "mine", "farm"] as const;
 export const OtherUnitSchema = z.enum(otherUnits);
 export type OtherUnit = z.infer<typeof OtherUnitSchema>;
 export type OtherUnitType =
   | UnitType.City
   | UnitType.DefensePost
-  | UnitType.MissileSilo
   | UnitType.Port
-  | UnitType.SAMLauncher
   | UnitType.Warship
-  | UnitType.Factory;
+  | UnitType.Mine
+  | UnitType.Farm;
 
 export const unitTypeToOtherUnit = {
   [UnitType.City]: "city",
   [UnitType.DefensePost]: "defp",
-  [UnitType.MissileSilo]: "silo",
   [UnitType.Port]: "port",
-  [UnitType.SAMLauncher]: "saml",
   [UnitType.Warship]: "wshp",
-  [UnitType.Factory]: "fact",
+  [UnitType.Mine]: "mine",
+  [UnitType.Farm]: "farm",
 } as const satisfies Record<OtherUnitType, OtherUnit>;
 
 // Attacks
@@ -98,11 +72,6 @@ export const BOAT_INDEX_DESTROY = 3; // Boats destroyed
 // written before this index existed stay valid and simply stop one short.
 export const BOAT_INDEX_LOST = 4; // Own boats destroyed, whoever destroyed them
 
-// Bombs
-export const BOMB_INDEX_LAUNCH = 0; // Bombs launched
-export const BOMB_INDEX_LAND = 1; // Bombs landed
-export const BOMB_INDEX_INTERCEPT = 2; // Bombs intercepted
-
 // Gold
 export const GOLD_INDEX_WORK = 0; // Gold earned by workers
 export const GOLD_INDEX_WAR = 1; // Gold earned by conquering players
@@ -122,8 +91,8 @@ export const DONATION_INDEX_GOLD_RECV = 0;
 export const DONATION_INDEX_GOLD_RECV_BROKE = 1;
 
 // Broke means "cannot buy anything at all": the cheapest purchasable unit in
-// the game is a first Defense Post at 50k, and every other structure, warship
-// and warhead costs more (Config.ts). A literal rather than a read of the cost
+// the game is a first Defense Post at 50k, and every other structure and
+// warship costs more (Config.ts). A literal rather than a read of the cost
 // table on purpose — a banked record is judged by infra long after the match,
 // so the line has to mean the same thing forever, even if the economy is
 // rebalanced.
@@ -182,7 +151,6 @@ export const PlayerStatsSchema = z
       .optional(),
     conquests: AtLeastOneNumberSchema.optional(),
     boats: z.partialRecord(BoatUnitSchema, AtLeastOneNumberSchema).optional(),
-    bombs: z.partialRecord(BombUnitSchema, AtLeastOneNumberSchema).optional(),
     gold: AtLeastOneNumberSchema.optional(),
     units: z.partialRecord(OtherUnitSchema, AtLeastOneNumberSchema).optional(),
     // Appended at the end of the shape on purpose: zbin encodes object fields

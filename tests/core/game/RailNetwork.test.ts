@@ -199,11 +199,7 @@ describe("RailNetworkImpl", () => {
       expect(result).toEqual([]);
     });
 
-    test.each([
-      UnitType.MissileSilo,
-      UnitType.DefensePost,
-      UnitType.SAMLauncher,
-    ])(
+    test.each([UnitType.DefensePost])(
       "returns empty array for %s which cannot snap to railroads",
       (unitType) => {
         const tile = 42 as any;
@@ -401,7 +397,7 @@ describe("RailNetworkImpl", () => {
       const mockPath = [100, 60, 50, 42];
       pathService.findTilePath.mockReturnValue(mockPath);
 
-      const result = network.computeGhostRailPaths(UnitType.Factory, tile);
+      const result = network.computeGhostRailPaths(UnitType.Mine, tile);
       expect(result).toEqual([mockPath]);
       expect(pathService.findTilePath).toHaveBeenCalledWith(100, tile);
     });
@@ -424,7 +420,7 @@ describe("RailNetworkImpl", () => {
       const mockPath = [42, 50, 60, 100];
       pathService.findTilePath.mockReturnValue(mockPath);
 
-      const result = network.computeGhostRailPaths(UnitType.Factory, tile);
+      const result = network.computeGhostRailPaths(UnitType.Mine, tile);
       expect(result).toEqual([mockPath]);
       expect(pathService.findTilePath).toHaveBeenCalledWith(tile, 100);
     });
@@ -469,10 +465,10 @@ describe("factory rail preview path consistency", () => {
     expect(city.hasTrainStation()).toBe(false);
     const previewPath = game
       .railNetwork()
-      .computeGhostRailPaths(UnitType.Factory, factoryTile)[0];
+      .computeGhostRailPaths(UnitType.Mine, factoryTile)[0];
     expect(previewPath).toBeDefined();
 
-    const factory = player.buildUnit(UnitType.Factory, factoryTile, {});
+    const factory = player.buildUnit(UnitType.Mine, factoryTile, {});
     game.addExecution(new FactoryExecution(factory));
     for (let i = 0; i < 5; i++) {
       game.executeNextTick();
@@ -505,10 +501,10 @@ describe("factory rail preview path consistency", () => {
     expect(port.hasTrainStation()).toBe(false);
     const previewPath = game
       .railNetwork()
-      .computeGhostRailPaths(UnitType.Factory, factoryTile)[0];
+      .computeGhostRailPaths(UnitType.Mine, factoryTile)[0];
     expect(previewPath).toBeDefined();
 
-    const factory = player.buildUnit(UnitType.Factory, factoryTile, {});
+    const factory = player.buildUnit(UnitType.Mine, factoryTile, {});
     game.addExecution(new FactoryExecution(factory));
     for (let i = 0; i < 5; i++) {
       game.executeNextTick();

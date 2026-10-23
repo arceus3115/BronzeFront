@@ -7,11 +7,9 @@ import {
   BOAT_INDEX_DESTROY,
   BOAT_INDEX_LOST,
 } from "@openfront/engine-api/StatsSchemas";
-import { NukeExecution } from "@openfront/engine/execution/NukeExecution";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
 import { Game, Player } from "@openfront/engine/game/Game";
 import { setup } from "./util/Setup";
-import { constructionExecution } from "./util/utils";
 
 let game: Game;
 let owner: Player;
@@ -69,26 +67,6 @@ describe("BoatLossStats", () => {
     expect(boats(enemy, "trade")?.[BOAT_INDEX_DESTROY]).toBe(1n);
   });
 
-  test("the owner's own nuke still costs them the transport, with no kill credit", () => {
-    constructionExecution(game, owner, 50, 50, UnitType.MissileSilo);
-    const target = game.ref(52, 52);
-    const transport = owner.buildUnit(UnitType.TransportShip, target, {
-      troops: 100,
-    });
-
-    game.addExecution(
-      new NukeExecution(UnitType.AtomBomb, owner, target, null),
-    );
-    for (let i = 0; i < 60 && transport.isActive(); i++) {
-      game.executeNextTick();
-    }
-
-    expect(transport.isActive()).toBe(false);
-    expect(boats(owner, "trans")?.[BOAT_INDEX_LOST]).toBe(1n);
-    // Friendly fire deliberately passes no destroyer (NukeExecution), so
-    // nobody scores the kill -- but the boat is still gone.
-    expect(boats(owner, "trans")?.[BOAT_INDEX_DESTROY] ?? 0n).toBe(0n);
-  });
 
   test("being eliminated charges the owner every boat still afloat", () => {
     const port = enemy.buildUnit(UnitType.Port, game.ref(10, 10), {});

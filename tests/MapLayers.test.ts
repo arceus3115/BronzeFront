@@ -74,24 +74,7 @@ describe("Map layer feature", () => {
   });
 
   describe("MapLayer type", () => {
-    test("layer with all fields", () => {
-      const layer: MapLayer = {
-        id: "forests",
-        placement: "land",
-        nukeable: true,
-      };
-      expect(layer.id).toBe("forests");
-      expect(layer.placement).toBe("land");
-      expect(layer.nukeable).toBe(true);
-    });
 
-    test("layer without nukeable defaults to undefined", () => {
-      const layer: MapLayer = {
-        id: "deserts",
-        placement: "water",
-      };
-      expect(layer.nukeable).toBeUndefined();
-    });
 
     test("layer with alpha stores the value", () => {
       const layer: MapLayer = {

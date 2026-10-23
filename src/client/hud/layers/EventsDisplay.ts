@@ -43,10 +43,6 @@ interface GameEvent {
 }
 
 const TIER_1_TYPES: ReadonlySet<MessageType> = new Set([
-  MessageType.NUKE_INBOUND,
-  MessageType.HYDROGEN_BOMB_INBOUND,
-  MessageType.MIRV_INBOUND,
-  MessageType.NUKE_DETONATED,
   MessageType.NAVAL_INVASION_INBOUND,
   MessageType.ATTACK_REQUEST,
   MessageType.ALLIANCE_ACCEPTED,
@@ -215,9 +211,6 @@ export class EventsDisplay extends LitElement implements Controller {
       // viewer seeked back past it.
       const expired = age >= 80 || age < 0;
       const isInboundWarning =
-        event.type === MessageType.NUKE_INBOUND ||
-        event.type === MessageType.HYDROGEN_BOMB_INBOUND ||
-        event.type === MessageType.MIRV_INBOUND ||
         event.type === MessageType.NAVAL_INVASION_INBOUND;
       const unitGone =
         isInboundWarning &&

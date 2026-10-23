@@ -143,7 +143,6 @@
     }
   ],
   "categories": ["arcade"],
-  "forced_modifiers": ["isWaterNukes:50"],
   "id": "ChoppingBlock",
   "map": {
     "height": 1616,

@@ -267,6 +267,21 @@ export interface RestoreDeps {
  * Rebuilds a game from a snapshot. The game continues from the stored tick:
  * call executeNextTick as usual, without re-running GameRunner.init.
  */
+/** Placeholder for an execution this build no longer has. */
+class RetiredExecution implements Execution {
+  isActive(): boolean {
+    return false;
+  }
+  activeDuringSpawnPhase(): boolean {
+    return false;
+  }
+  init(): void {}
+  tick(): void {}
+  snapshot(): ExecRecord {
+    throw new SnapshotError("retired execution cannot be saved");
+  }
+}
+
 export function restoreGame(bytes: Uint8Array, deps: RestoreDeps): Game {
   const root = decodeRoot(bytes);
   const gameConfig = GameConfigSchema.parse(root.gameConfig);
@@ -352,13 +367,15 @@ export function restoreGame(bytes: Uint8Array, deps: RestoreDeps): Game {
   );
   const execData = root.execs.map((rec) => {
     const type = execTypes.get(rec.t);
-    if (type === undefined) {
-      throw new SnapshotError(`unknown execution type ${rec.t}`);
-    }
+    // Missile and doomsday executions are gone. Keep the slot so later
+    // references still line up, and let the next tick drop the placeholder.
+    if (type === undefined) return null;
     return { type, data: readVersioned(type, rec) };
   });
-  const execs = execData.map(
-    ({ type }) => Object.create(type.cls().prototype) as Execution,
+  const execs = execData.map((entry) =>
+    entry === null
+      ? new RetiredExecution()
+      : (Object.create(entry.type.cls().prototype) as Execution),
   );
 
   const r = new SnapshotReader(game, {
@@ -389,12 +406,13 @@ export function restoreGame(bytes: Uint8Array, deps: RestoreDeps): Game {
   fill(stations);
   fill(railroads);
   fill(clusters);
-  execData.forEach(({ data }, i) => {
+  execData.forEach((entry, i) => {
+    if (entry === null) return;
     (
       execs[i] as unknown as {
         restoreSnapshot(s: unknown, r: SnapshotReader): void;
       }
-    ).restoreSnapshot(data, r);
+    ).restoreSnapshot(entry.data, r);
   });
   game.restoreState(state, r);
 

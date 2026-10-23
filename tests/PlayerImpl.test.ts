@@ -80,7 +80,7 @@ describe("PlayerImpl", () => {
       player.buildUnit(UnitType.City, game.ref(0, 0), {});
       player.buildUnit(UnitType.DefensePost, game.ref(11, 0), {});
       player.buildUnit(UnitType.City, game.ref(0, 11), {});
-      player.buildUnit(UnitType.MissileSilo, game.ref(11, 11), {});
+      player.buildUnit(UnitType.Mine, game.ref(11, 11), {});
     });
 
     // Reference implementation: filter _units preserving insertion order.
@@ -105,13 +105,13 @@ describe("PlayerImpl", () => {
     });
 
     test("two and three types return the union in insertion order", () => {
-      expect(player.units(UnitType.City, UnitType.MissileSilo)).toEqual(
-        expected(UnitType.City, UnitType.MissileSilo),
+      expect(player.units(UnitType.City, UnitType.Mine)).toEqual(
+        expected(UnitType.City, UnitType.Mine),
       );
       expect(
-        player.units(UnitType.City, UnitType.DefensePost, UnitType.MissileSilo),
+        player.units(UnitType.City, UnitType.DefensePost, UnitType.Mine),
       ).toEqual(
-        expected(UnitType.City, UnitType.DefensePost, UnitType.MissileSilo),
+        expected(UnitType.City, UnitType.DefensePost, UnitType.Mine),
       );
       // Duplicate types don't duplicate results.
       expect(player.units(UnitType.City, UnitType.City)).toEqual(
@@ -124,11 +124,11 @@ describe("PlayerImpl", () => {
         player.units([
           UnitType.City,
           UnitType.DefensePost,
-          UnitType.MissileSilo,
+          UnitType.Mine,
           UnitType.Port,
         ]),
       ).toEqual(
-        expected(UnitType.City, UnitType.DefensePost, UnitType.MissileSilo),
+        expected(UnitType.City, UnitType.DefensePost, UnitType.Mine),
       );
       expect(player.units(UnitType.Port)).toEqual([]);
     });

@@ -1,6 +1,5 @@
 import { TileRef } from "@openfront/engine-api/game/GameMap";
 import {
-  NukeState,
   Tick,
   TrainType,
   TransportShipState,
@@ -36,7 +35,6 @@ export class UnitView implements UnitLike {
   /** Engine-only fields not in UnitState. Use warshipState() / transportShipState() to read. */
   private _warshipState?: WarshipState;
   private _transportShipState?: TransportShipState;
-  private _nukeState?: NukeState;
   private _createdAt: Tick;
 
   constructor(
@@ -46,7 +44,6 @@ export class UnitView implements UnitLike {
     this.state = unitStateFromUpdate(data);
     this._warshipState = data.warshipState;
     this._transportShipState = data.transportShipState;
-    this._nukeState = data.nukeState;
     this.lastPos.push(data.pos);
     this._createdAt = this.gameView.ticks();
     if (this.state.underConstruction) {
@@ -80,7 +77,6 @@ export class UnitView implements UnitLike {
     applyUnitUpdateInPlace(this.state, data);
     this._warshipState = data.warshipState;
     this._transportShipState = data.transportShipState;
-    this._nukeState = data.nukeState;
     // constructionStartTick: set on transition into underConstruction.
     if (this.state.underConstruction && !wasUnderConstruction) {
       this.state.constructionStartTick = this.gameView.ticks();
@@ -145,15 +141,6 @@ export class UnitView implements UnitLike {
   ): void {
     throw new Error("updateTransportShipState is not supported on UnitView");
   }
-  nukeState(): NukeState {
-    if (this._nukeState === undefined) {
-      throw new Error("nukeState called on non-nuke unit");
-    }
-    return this._nukeState;
-  }
-  updateNukeState(_update: NukeState): void {
-    throw new Error("updateNukeState is not supported on UnitView");
-  }
   tile(): TileRef {
     return this.state.pos;
   }
@@ -184,47 +171,11 @@ export class UnitView implements UnitLike {
   isUnderConstruction(): boolean {
     return this.state.underConstruction;
   }
-  isInCooldown(): boolean {
-    return this.state.missileTimerQueue.length === this.state.level;
-  }
   targetUnitId(): number | undefined {
     return this.state.targetUnitId ?? undefined;
   }
   targetTile(): TileRef | undefined {
     return this.state.targetTile ?? undefined;
-  }
-
-  // How "ready" this unit is from 0 to 1.
-  missileReadinesss(): number {
-    const maxMissiles = this.state.level;
-    const missilesReloading = this.state.missileTimerQueue.length;
-
-    if (missilesReloading === 0) {
-      return 1;
-    }
-
-    const missilesReady = maxMissiles - missilesReloading;
-
-    if (missilesReady === 0 && maxMissiles > 1) {
-      // Unless we have just one missile (level 1),
-      // show 0% readiness so user knows no missiles are ready.
-      return 0;
-    }
-
-    let readiness = missilesReady / maxMissiles;
-
-    const cooldownDuration =
-      this.state.unitType === UnitType.SAMLauncher
-        ? this.gameView.config().SAMCooldown()
-        : this.gameView.config().SiloCooldown();
-
-    for (const cooldown of this.state.missileTimerQueue) {
-      const cooldownProgress = this.gameView.ticks() - cooldown;
-      const cooldownRatio = cooldownProgress / cooldownDuration;
-      const adjusted = cooldownRatio / maxMissiles;
-      readiness += adjusted;
-    }
-    return readiness;
   }
 
   level(): number {
@@ -238,8 +189,5 @@ export class UnitView implements UnitLike {
   }
   isLoaded(): boolean | undefined {
     return this.state.loaded ?? undefined;
-  }
-  missileTimerQueue(): number[] {
-    return this.state.missileTimerQueue;
   }
 }

@@ -96,15 +96,13 @@ export function findJuiciestTarget(
   if (candidates.length === 0) return null;
 
   const stats = candidates.map((p) => {
-    // Defense posts and missile silos are defensive, not a prize worth
-    // capturing - only count the rest of the structures.
+    // Defense posts are defensive, not a prize worth capturing — only count
+    // the rest of the structures.
     const structureCount = p
       .units()
       .reduce(
         (sum, u) =>
-          Structures.has(u.type()) &&
-          u.type() !== UnitType.DefensePost &&
-          u.type() !== UnitType.MissileSilo
+          Structures.has(u.type()) && u.type() !== UnitType.DefensePost
             ? sum + u.level()
             : sum,
         0,

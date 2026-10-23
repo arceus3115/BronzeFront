@@ -10,7 +10,6 @@ import {
   isValidGameID,
   TeamCountConfig,
 } from "@openfront/engine-api/Schemas";
-import { DoomsdayClockSpeed } from "@openfront/engine-lib/game/DoomsdayClock";
 import { GameEnv } from "@openfront/shared/configuration/Env";
 import { EventBus } from "@openfront/shared/EventBus";
 import {
@@ -94,15 +93,12 @@ export class HostLobbyModal extends BaseModal {
   @state() private startingGoldValue: number | undefined = undefined;
   @state() private customAlliances: boolean = false;
   @state() private customAllianceMinutes: number | undefined = undefined;
-  @state() private doomsdayClock: boolean = false;
-  @state() private doomsdayClockSpeed: DoomsdayClockSpeed = "normal";
   @state() private overtime: boolean = false;
   @state() private overtimeStartMinutes: number | undefined = undefined;
   @state() private anonymizeNames: boolean = false;
   @state() private nameReveals: string[] = [];
   @state() private whitelistEnabled: boolean = false;
   @state() private allowedPublicIds: string = "";
-  @state() private waterNukes: boolean = false;
   @state() private lobbyId = "";
   @state() private lobbyUrlSuffix = "";
   @state() private clients: ClientInfo[] = [];
@@ -702,15 +698,6 @@ export class HostLobbyModal extends BaseModal {
                     labelKey: "host_modal.anonymous_players",
                     checked: this.anonymizeNames,
                   },
-                  {
-                    labelKey: "game_settings.water_nukes",
-                    checked: this.waterNukes,
-                  },
-                  {
-                    labelKey: "game_settings.doomsday_clock",
-                    checked: this.doomsdayClock,
-                    doomsdayClockSpeed: this.doomsdayClockSpeed,
-                  },
                   // Host cheats and public listing are mutually exclusive
                   // (the server rejects both combinations), so the controls
                   // disappear while the lobby is listed.
@@ -748,8 +735,6 @@ export class HostLobbyModal extends BaseModal {
             @map-selected=${this.handleConfigMapSelected}
             @random-map-selected=${this.handleConfigRandomMapSelected}
             @difficulty-selected=${this.handleConfigDifficultySelected}
-            @doomsday-clock-speed-selected=${this
-              .handleConfigDoomsdayClockSpeedSelected}
             @game-mode-selected=${this.handleConfigGameModeSelected}
             @team-count-selected=${this.handleConfigTeamCountSelected}
             @bots-changed=${this.handleBotsChange}
@@ -1035,15 +1020,12 @@ export class HostLobbyModal extends BaseModal {
     this.startingGoldValue = undefined;
     this.customAlliances = false;
     this.customAllianceMinutes = undefined;
-    this.doomsdayClock = false;
-    this.doomsdayClockSpeed = "normal";
     this.overtime = false;
     this.overtimeStartMinutes = undefined;
     this.anonymizeNames = false;
     this.nameReveals = [];
     this.whitelistEnabled = false;
     this.allowedPublicIds = "";
-    this.waterNukes = false;
     this.hostCheatsEnabled = false;
     this.hostCheatInfiniteGold = false;
     this.hostCheatInfiniteTroops = false;
@@ -1094,12 +1076,6 @@ export class HostLobbyModal extends BaseModal {
     void this.handleDifficultySelection(customEvent.detail.difficulty);
   };
 
-  private handleConfigDoomsdayClockSpeedSelected = (e: Event) => {
-    const customEvent = e as CustomEvent<{ speed: DoomsdayClockSpeed }>;
-    this.doomsdayClockSpeed = customEvent.detail.speed;
-    this.putGameConfig();
-  };
-
   private handleConfigGameModeSelected = (e: Event) => {
     const customEvent = e as CustomEvent<{ mode: GameMode }>;
     void this.handleGameModeSelection(customEvent.detail.mode);
@@ -1141,14 +1117,6 @@ export class HostLobbyModal extends BaseModal {
         break;
       case "host_modal.anonymous_players":
         this.anonymizeNames = checked;
-        this.putGameConfig();
-        break;
-      case "game_settings.water_nukes":
-        this.waterNukes = checked;
-        this.putGameConfig();
-        break;
-      case "game_settings.doomsday_clock":
-        this.doomsdayClock = checked;
         this.putGameConfig();
         break;
       case "host_modal.host_cheats":
@@ -1679,11 +1647,6 @@ export class HostLobbyModal extends BaseModal {
             // Send {enabled:false} (not undefined) when off: undefined is dropped
             // by JSON.stringify, so the server's "!== undefined" merge would keep a
             // previously-enabled config and the toggle could never turn off.
-            doomsdayClock: this.doomsdayClock
-              ? { enabled: true, speed: this.doomsdayClockSpeed }
-              : { enabled: false },
-            // Same {enabled:false} rule as doomsdayClock above: undefined is
-            // dropped by JSON.stringify, so the toggle could never turn off.
             overtime: this.overtime
               ? {
                   enabled: true,
@@ -1695,7 +1658,6 @@ export class HostLobbyModal extends BaseModal {
             allowedPublicIds: this.whitelistEnabled
               ? (this.parseAllowedPublicIds() ?? [])
               : [],
-            waterNukes: this.waterNukes ? true : null,
             hostCheats: this.hostCheatsEnabled
               ? {
                   infiniteGold: this.hostCheatInfiniteGold || undefined,

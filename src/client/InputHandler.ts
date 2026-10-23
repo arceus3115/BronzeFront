@@ -89,6 +89,8 @@ export class DragEvent implements GameEvent {
   ) {}
 }
 
+export class ToggleInfluenceEvent implements GameEvent {}
+
 export class AlternateViewEvent implements GameEvent {
   constructor(public readonly alternateView: boolean) {}
 }
@@ -108,10 +110,6 @@ export class ToggleStructureEvent implements GameEvent {
 }
 
 export class ConfirmGhostStructureEvent implements GameEvent {}
-
-export class SwapRocketDirectionEvent implements GameEvent {
-  constructor(public readonly rocketDirectionUp: boolean) {}
-}
 
 /** Emitted while the user is drawing a shift+drag selection rectangle */
 export class WarshipSelectionBoxUpdateEvent implements GameEvent {
@@ -496,16 +494,15 @@ export class InputHandler {
       const increment = this.userSettings.attackRatioIncrement();
       this.eventBus.emit(new AttackRatioEvent(increment));
     });
-    this.addKeybindAndEvent(this.keybinds.swapDirection, () => {
-      const nextDirection = !this.uiState.rocketDirectionUp;
-      this.eventBus.emit(new SwapRocketDirectionEvent(nextDirection));
-    });
     this.addKeybindAndEvent("Shift+KeyD", () => {
       this.eventBus.emit(new TogglePerformanceOverlayEvent());
     });
     this.addKeybindAndEvent(this.keybinds.toggleView, () => {
       this.alternateView = false;
       this.eventBus.emit(new AlternateViewEvent(false));
+    });
+    this.addKeybindAndEvent(this.keybinds.influence ?? "Space", () => {
+      this.eventBus.emit(new ToggleInfluenceEvent());
     });
     const resetKey = this.keybinds.resetGfx ?? "KeyR";
     const ignoreShift =
@@ -522,15 +519,11 @@ export class InputHandler {
 
     let buildKeybinds: string[] = [
       "buildCity",
-      "buildFactory",
+      "buildFarm",
+      "buildMine",
       "buildPort",
       "buildDefensePost",
-      "buildMissileSilo",
-      "buildSamLauncher",
-      "buildAtomBomb",
-      "buildHydrogenBomb",
       "buildWarship",
-      "buildMIRV",
     ];
     buildKeybinds = buildKeybinds.map((i: string): string => {
       return this.keybinds[i];
@@ -1493,15 +1486,11 @@ export class InputHandler {
       type: PlayerBuildableUnitType;
     }> = [
       { key: "buildCity", type: UnitType.City },
-      { key: "buildFactory", type: UnitType.Factory },
+      { key: "buildFarm", type: UnitType.Farm },
+      { key: "buildMine", type: UnitType.Mine },
       { key: "buildPort", type: UnitType.Port },
       { key: "buildDefensePost", type: UnitType.DefensePost },
-      { key: "buildMissileSilo", type: UnitType.MissileSilo },
-      { key: "buildSamLauncher", type: UnitType.SAMLauncher },
-      { key: "buildAtomBomb", type: UnitType.AtomBomb },
-      { key: "buildHydrogenBomb", type: UnitType.HydrogenBomb },
       { key: "buildWarship", type: UnitType.Warship },
-      { key: "buildMIRV", type: UnitType.MIRV },
     ];
     for (const { key, type } of buildKeybinds) {
       if (this.keybindMatchesEvent({ code, shiftKey }, this.keybinds[key]))

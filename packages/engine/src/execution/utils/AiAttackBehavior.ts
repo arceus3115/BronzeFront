@@ -25,9 +25,9 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../../snapshot/SnapshotContext";
-import { AttackExecution } from "../AttackExecution";
+import { ArmyExecution } from "../ArmyExecution";
+import { embark } from "../WarshipCargoExecution";
 import { hasHighStartingGold } from "../nation/NationUtils";
-import { TransportShipExecution } from "../TransportShipExecution";
 import { closestTwoTiles } from "../Util";
 
 // A planned boat attack: where it lands, how many tiles it sails, what would sink it
@@ -193,9 +193,9 @@ export abstract class AiAttackBehavior {
     }
 
     this.game.addExecution(
-      new AttackExecution(
-        troops,
+      new ArmyExecution(
         this.player,
+        troops,
         target.isPlayer() ? target.id() : this.game.terraNullius().id(),
       ),
     );
@@ -214,9 +214,7 @@ export abstract class AiAttackBehavior {
       return false;
     }
 
-    this.game.addExecution(
-      new TransportShipExecution(this.player, route.landing, troops),
-    );
+    embark(this.game, this.player, route.landing, troops);
     return true;
   }
 
@@ -292,7 +290,6 @@ export abstract class AiAttackBehavior {
         if (!this.game.isLand(tile)) continue;
         if (this.game.isImpassable(tile)) continue;
         if (this.game.hasOwner(tile)) continue;
-        if (this.game.hasFallout(tile)) continue;
         const launch = canBuildTransportShip(this.game, this.player, tile);
         if (launch === false) continue;
         if (this.sail(launch, tile).blocker !== null) continue;
@@ -307,9 +304,7 @@ export abstract class AiAttackBehavior {
     const troops = Math.min(this.player.troops() / 5, this.expansionTroopCap());
     if (troops < 1) return false;
 
-    this.game.addExecution(
-      new TransportShipExecution(this.player, tile, troops),
-    );
+    embark(this.game, this.player, tile, troops);
     return true;
   }
 

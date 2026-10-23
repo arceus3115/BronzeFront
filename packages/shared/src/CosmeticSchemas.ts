@@ -290,8 +290,8 @@ export const StructuresEffectAttributesSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-// Recolors the owner's structures (city, port, factory, defense post, SAM,
-// silo) with gradient / transition styles. Shown while the owner's territory
+// Recolors the owner's structures (city, port, factory, defense post) with
+// gradient / transition styles. Shown while the owner's territory
 // is hovered; structures otherwise keep their normal player colors.
 const StructuresEffectSchema = CosmeticSchema.extend({
   effectType: z.literal("structures"),

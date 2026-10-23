@@ -41,12 +41,13 @@ export class CityExecution implements Execution {
   }
 
   private createStation(): void {
-    const nearbyFactory = this.mg.hasUnitNearby(
+    const nearbySource = this.mg.anyUnitNearby(
       this.city.tile()!,
       this.mg.config().trainStationMaxRange(),
-      UnitType.Factory,
+      [UnitType.Mine, UnitType.Farm],
+      () => true,
     );
-    if (nearbyFactory) {
+    if (nearbySource) {
       this.mg.addExecution(new TrainStationExecution(this.city));
     }
   }

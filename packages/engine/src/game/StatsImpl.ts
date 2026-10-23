@@ -19,9 +19,6 @@ import {
   BOAT_INDEX_SENT,
   BoatUnit,
   BoatUnitType,
-  BOMB_INDEX_INTERCEPT,
-  BOMB_INDEX_LAND,
-  BOMB_INDEX_LAUNCH,
   DONATION_BROKE_GOLD_THRESHOLD,
   DONATION_INDEX_GOLD_RECV,
   DONATION_INDEX_GOLD_RECV_BROKE,
@@ -32,7 +29,6 @@ import {
   GOLD_INDEX_TRAIN_SELF,
   GOLD_INDEX_WAR,
   GOLD_INDEX_WORK,
-  NukeType,
   OTHER_INDEX_BUILT,
   OTHER_INDEX_CAPTURE,
   OTHER_INDEX_DESTROY,
@@ -47,7 +43,6 @@ import {
   TILE_INDEX_DRAWDOWN_TROUGH,
   TILE_INDEX_PEAK,
   unitTypeToBoatUnit,
-  unitTypeToBombUnit,
   unitTypeToOtherUnit,
 } from "@openfront/engine-api/StatsSchemas";
 import { snapshotType } from "@openfront/engine-lib/snapshot/SnapshotType";
@@ -140,21 +135,6 @@ export class StatsImpl implements Stats {
     p.boats[type] ??= [0n];
     while (p.boats[type].length <= index) p.boats[type].push(0n);
     p.boats[type][index] += _bigint(value);
-  }
-
-  private _addBomb(
-    player: Player,
-    nukeType: NukeType,
-    index: number,
-    value: BigIntLike,
-  ): void {
-    const type = unitTypeToBombUnit[nukeType];
-    const p = this._makePlayerStats(player);
-    if (p === undefined) return;
-    p.bombs ??= { [type]: [0n] };
-    p.bombs[type] ??= [0n];
-    while (p.bombs[type].length <= index) p.bombs[type].push(0n);
-    p.bombs[type][index] += _bigint(value);
   }
 
   private _addGold(player: Player, index: number, value: BigIntLike) {
@@ -329,26 +309,6 @@ export class StatsImpl implements Stats {
 
   boatLose(player: Player, type: BoatUnitType): void {
     this._addBoat(player, unitTypeToBoatUnit[type], BOAT_INDEX_LOST, 1);
-  }
-
-  bombLaunch(
-    player: Player,
-    target: Player | TerraNullius,
-    type: NukeType,
-  ): void {
-    this._addBomb(player, type, BOMB_INDEX_LAUNCH, 1);
-  }
-
-  bombLand(
-    player: Player,
-    target: Player | TerraNullius,
-    type: NukeType,
-  ): void {
-    this._addBomb(player, type, BOMB_INDEX_LAND, 1);
-  }
-
-  bombIntercept(player: Player, type: NukeType, count: BigIntLike): void {
-    this._addBomb(player, type, BOMB_INDEX_INTERCEPT, count);
   }
 
   goldWork(player: Player, gold: BigIntLike): void {

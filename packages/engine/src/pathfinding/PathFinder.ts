@@ -216,7 +216,7 @@ export class WaterPathFinder implements SteppingPathFinder<TileRef> {
   private _rebuilt = false;
 
   // Stagger support: spread pathfinder rebuilds over multiple ticks so all
-  // ships don't re-run A* simultaneously after a water-nuke.
+  // ships don't re-run A* simultaneously after a water-graph rebuild.
   private _staggerCountdown: number;
   private _pendingVersion: number = -1;
 

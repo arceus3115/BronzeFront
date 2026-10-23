@@ -19,7 +19,7 @@ import type {
  * Stored replays are also keyed by build, so this only matters for dev
  * builds, which all share "DEV".
  */
-export const REPLAY_VERSION = 1;
+export const REPLAY_VERSION = 2;
 
 /**
  * Frames per chunk. Each chunk starts with a keyframe, and keyframes are
@@ -44,25 +44,12 @@ export interface EncodedChunk {
 
 /**
  * When a unit's grid motion plan arrived (`tick`) and when it starts
- * moving (`startTick`). The client gets a plan before it starts (a nuke's
- * launch delay, for example), and the nuke telegraph needs both.
+ * moving (`startTick`).
  */
 export interface ReplayMotionPlan {
   tick: number;
   unitId: number;
   startTick: number;
-}
-
-/**
- * Tiles hit by nukes on one tick (from packedNukeImpacts), split by
- * whether each is land after that tick. A nukeable map layer loses the
- * tiles of its own placement (WebGLFrameBuilder.syncNukeImpacts), and a
- * water nuke can turn land into water later, so this is decided here.
- */
-export interface NukeImpactEvent {
-  tick: number;
-  land: number[];
-  water: number[];
 }
 
 export enum RailroadEventKind {
@@ -118,7 +105,6 @@ export type MiscUpdates = Record<string, unknown[]>;
 
 /** Event lists that go with the frames. */
 export interface ReplayEvents {
-  nukeImpacts: NukeImpactEvent[];
   railroadEvents: RailroadEvent[];
   motionPlans: ReplayMotionPlan[];
   constructionStarts: ConstructionStartEvent[];
@@ -129,7 +115,6 @@ export interface ReplayEvents {
 
 /** The ReplayEvents fields that are lists (they only ever grow). */
 export const EVENT_LISTS = [
-  "nukeImpacts",
   "railroadEvents",
   "motionPlans",
   "constructionStarts",

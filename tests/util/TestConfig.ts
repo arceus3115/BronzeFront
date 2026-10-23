@@ -1,5 +1,4 @@
-import { Tick, UnitType } from "@openfront/engine-api/game/GameTypes";
-import { NukeMagnitude } from "@openfront/engine-lib/configuration/Config";
+import { Tick } from "@openfront/engine-api/game/GameTypes";
 import {
   AttackLogicInput,
   AttackLogicResult,
@@ -8,7 +7,6 @@ import {
 
 export class TestConfig extends EngineConfig {
   private _proximityBonusPortsNb: number = 0;
-  private _defaultNukeSpeed: number = 4;
   private _spawnImmunityDuration: number = 0;
   private _nationSpawnImmunityDuration: number = 0;
 
@@ -29,33 +27,8 @@ export class TestConfig extends EngineConfig {
     this._proximityBonusPortsNb = nb;
   }
 
-  nukeMagnitudes(_: UnitType): NukeMagnitude {
-    return { inner: 1, outer: 1 };
-  }
-
-  setDefaultNukeSpeed(speed: number): void {
-    this._defaultNukeSpeed = speed;
-  }
-
-  // Flat speed for all nuke types so test tick counts stay predictable.
-  nukeSpeed(_: UnitType): number {
-    return this._defaultNukeSpeed;
-  }
-
-  defaultNukeTargetableRange(): number {
-    return 20;
-  }
-
   deletionMarkDuration(): number {
     return 5;
-  }
-
-  defaultSamRange(): number {
-    return 20;
-  }
-
-  samRange(level: number): number {
-    return 20;
   }
 
   setSpawnImmunityDuration(duration: Tick) {

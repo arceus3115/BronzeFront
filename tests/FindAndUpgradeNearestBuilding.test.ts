@@ -165,11 +165,11 @@ describe("findAndUpgradeNearestBuilding", () => {
       // Player clicked near the SAM — should do nothing
       const samTile = 5 as TileRef;
       const dpTile = 20 as TileRef;
-      const samUnit = makeUnit(10, UnitType.SAMLauncher, PLAYER_ID, samTile);
+      const samUnit = makeUnit(10, UnitType.Port, PLAYER_ID, samTile);
       const defensePost = makeUnit(1, UnitType.DefensePost, PLAYER_ID, dpTile);
 
       const buildableUnits = [
-        { type: UnitType.SAMLauncher, canUpgrade: false },
+        { type: UnitType.Port, canUpgrade: false },
         { type: UnitType.DefensePost, canUpgrade: 1 },
       ];
       const distMap = new Map<TileRef, number>([
@@ -193,11 +193,11 @@ describe("findAndUpgradeNearestBuilding", () => {
       // Player clicked near the DefensePost — should upgrade it
       const samTile = 20 as TileRef;
       const dpTile = 5 as TileRef;
-      const samUnit = makeUnit(10, UnitType.SAMLauncher, PLAYER_ID, samTile);
+      const samUnit = makeUnit(10, UnitType.Port, PLAYER_ID, samTile);
       const defensePost = makeUnit(1, UnitType.DefensePost, PLAYER_ID, dpTile);
 
       const buildableUnits = [
-        { type: UnitType.SAMLauncher, canUpgrade: false },
+        { type: UnitType.Port, canUpgrade: false },
         { type: UnitType.DefensePost, canUpgrade: 1 },
       ];
       const distMap = new Map<TileRef, number>([
@@ -224,11 +224,11 @@ describe("findAndUpgradeNearestBuilding", () => {
       const cityTile = 5 as TileRef;
       const factoryTile = 20 as TileRef;
       const cityUnit = makeUnit(10, UnitType.City, PLAYER_ID, cityTile);
-      const factoryUnit = makeUnit(1, UnitType.Factory, PLAYER_ID, factoryTile);
+      const factoryUnit = makeUnit(1, UnitType.Mine, PLAYER_ID, factoryTile);
 
       const buildableUnits = [
         { type: UnitType.City, canUpgrade: false },
-        { type: UnitType.Factory, canUpgrade: 1 },
+        { type: UnitType.Mine, canUpgrade: 1 },
       ];
       const distMap = new Map<TileRef, number>([
         [cityTile, 2],
@@ -254,14 +254,14 @@ describe("findAndUpgradeNearestBuilding", () => {
     });
 
     test("upgrades SAM when it IS affordable", async () => {
-      const samUnit = makeUnit(10, UnitType.SAMLauncher, PLAYER_ID);
-      const buildableUnits = [{ type: UnitType.SAMLauncher, canUpgrade: 10 }];
+      const samUnit = makeUnit(10, UnitType.Port, PLAYER_ID);
+      const buildableUnits = [{ type: UnitType.Port, canUpgrade: 10 }];
       const { runner, emitSpy } = makeRunner(buildableUnits, [samUnit], []);
 
       await runner.findAndUpgradeNearestBuilding(TILE);
 
       expect(emitSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ unitId: 10, unitType: UnitType.SAMLauncher }),
+        expect.objectContaining({ unitId: 10, unitType: UnitType.Port }),
       );
     });
   });
@@ -271,10 +271,10 @@ describe("findAndUpgradeNearestBuilding", () => {
       const dpTile = 10 as TileRef;
       const factoryTile = 20 as TileRef;
       const defensePost = makeUnit(1, UnitType.DefensePost, PLAYER_ID, dpTile);
-      const factory = makeUnit(2, UnitType.Factory, PLAYER_ID, factoryTile);
+      const factory = makeUnit(2, UnitType.Mine, PLAYER_ID, factoryTile);
       const buildableUnits = [
         { type: UnitType.DefensePost, canUpgrade: 1 },
-        { type: UnitType.Factory, canUpgrade: 2 },
+        { type: UnitType.Mine, canUpgrade: 2 },
       ];
       const distMap = new Map<TileRef, number>([
         [dpTile, 3],
@@ -297,10 +297,10 @@ describe("findAndUpgradeNearestBuilding", () => {
     test("upgrades SAM when both SAM and DefensePost are upgradeable and SAM is closer", async () => {
       const samTile = 5 as TileRef;
       const dpTile = 20 as TileRef;
-      const samUnit = makeUnit(10, UnitType.SAMLauncher, PLAYER_ID, samTile);
+      const samUnit = makeUnit(10, UnitType.Port, PLAYER_ID, samTile);
       const defensePost = makeUnit(1, UnitType.DefensePost, PLAYER_ID, dpTile);
       const buildableUnits = [
-        { type: UnitType.SAMLauncher, canUpgrade: 10 },
+        { type: UnitType.Port, canUpgrade: 10 },
         { type: UnitType.DefensePost, canUpgrade: 1 },
       ];
       const distMap = new Map<TileRef, number>([
@@ -317,7 +317,7 @@ describe("findAndUpgradeNearestBuilding", () => {
       await runner.findAndUpgradeNearestBuilding(TILE);
 
       expect(emitSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ unitId: 10, unitType: UnitType.SAMLauncher }),
+        expect.objectContaining({ unitId: 10, unitType: UnitType.Port }),
       );
     });
   });

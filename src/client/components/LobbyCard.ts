@@ -213,7 +213,6 @@ export function lobbyCard({
   // Longest first, so on a short card the pills that say the most stay legible.
   const modifiers = getModifierLabels(
     lobby.gameConfig?.publicGameModifiers,
-    lobby.gameConfig?.doomsdayClock?.speed,
   ).sort((a, b) => b.length - a.length);
   const trustedOnly = lobby.gameConfig?.trusted === true;
   const custom = lobby.custom === true;

@@ -25,20 +25,12 @@ const stats: PlayerStats = {
     trade: [21n, 22n, 23n, 24n],
     trans: [31n, 32n, 33n, 34n],
   },
-  bombs: {
-    abomb: [41n, 42n, 43n],
-    hbomb: [51n, 52n, 53n],
-    mirv: [61n, 62n, 63n],
-    mirvw: [71n, 72n, 73n],
-  },
   gold: [81n, 82n, 83n, 84n, 85n, 86n],
   units: {
     city: [91n, 92n, 93n, 94n],
     defp: [101n, 102n, 103n, 104n],
     port: [111n, 112n, 113n, 114n],
-    saml: [121n, 122n, 123n, 124n],
-    silo: [131n, 132n, 133n, 134n],
-    fact: [141n, 142n, 143n, 144n],
+    farm: [141n, 142n, 143n, 144n],
     wshp: [151n, 152n, 153n, 154n],
   },
 };
@@ -168,8 +160,8 @@ describe("PlayerStatsTable", () => {
         text(candidate.querySelector("th")) === "player_stats_table.building",
     );
     expect(buildings, "buildings table should exist").toBeDefined();
-    // The six structures, with the warship row moved to its own section.
-    expect(buildings?.querySelectorAll("tbody tr")).toHaveLength(6);
+    // Structures, with the warship row moved to its own section.
+    expect(buildings?.querySelectorAll("tbody tr")).toHaveLength(5);
     expect(buildings?.textContent).not.toContain("unit_type.warship");
 
     expect(columnsOf(table, "player_stats_table.warship_stats")).toEqual({
@@ -177,19 +169,6 @@ describe("PlayerStatsTable", () => {
       "player_stats_table.destroyed": "152",
       "player_stats_table.captured": "153",
       "player_stats_table.lost": "154",
-    });
-  });
-
-  it("shows nuke columns in launched/landed/intercepted order", async () => {
-    const table = await renderTable(stats);
-
-    expect(
-      columnsOf(table, "player_stats_table.nuke_stats", "unit_type.atom_bomb"),
-    ).toEqual({
-      "player_stats_table.weapon": "unit_type.atom_bomb",
-      "player_stats_table.launched": "41",
-      "player_stats_table.landed": "42",
-      "player_stats_table.intercepted": "43",
     });
   });
 

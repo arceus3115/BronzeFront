@@ -10,7 +10,6 @@ type TestSidebar = GameRightSidebar & { updateComplete: Promise<unknown> };
 function fakeGame(): GameView {
   const config = {
     gameConfig: () => ({ maxTimerValue: undefined }),
-    doomsdayClockConfig: () => ({ enabled: false }),
     overtimeConfig: () => ({ enabled: false, startMinutes: 0 }),
     isReplay: () => false,
     listed: true,
