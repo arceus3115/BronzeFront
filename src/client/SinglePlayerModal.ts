@@ -514,10 +514,11 @@ export class SinglePlayerModal extends BaseModal {
             .sectionGapClass=${"space-y-6"}
             .settings=${{
               map: {
-                selected: this.selectedMap,
-                useRandom: this.useRandomMap,
+                selected: GameMapType.World,
+                useRandom: false,
                 showMedals: this.showAchievements,
                 mapWins: this.mapWins,
+                locked: true,
               },
               difficulty: {
                 selected: this.selectedDifficulty,
@@ -561,7 +562,8 @@ export class SinglePlayerModal extends BaseModal {
                   },
                   {
                     labelKey: "game_settings.compact_map",
-                    checked: this.compactMap,
+                    checked: false,
+                    hidden: true,
                   },
                 ],
                 inputCards,
@@ -1061,10 +1063,11 @@ export class SinglePlayerModal extends BaseModal {
       finalMaxTimerValue = Math.max(1, Math.min(120, this.maxTimerValue));
     }
 
+    this.selectedMap = GameMapType.World;
+    this.compactMap = false;
+    this.useRandomMap = false;
     await this.launch(async ({ resolvedName, cosmetics }, usernameInput) => {
-      console.log(
-        `Starting single player game with map: ${GameMapType[this.selectedMap as keyof typeof GameMapType]}${this.useRandomMap ? " (Randomly selected)" : ""}`,
-      );
+      console.log("Starting single player game on World");
       const clientID = generateID();
       const gameID = generateID();
       return {
@@ -1080,10 +1083,8 @@ export class SinglePlayerModal extends BaseModal {
             },
           ],
           config: {
-            gameMap: this.selectedMap,
-            gameMapSize: this.compactMap
-              ? GameMapSize.Compact
-              : GameMapSize.Normal,
+            gameMap: GameMapType.World,
+            gameMapSize: GameMapSize.Normal,
             gameType: GameType.Singleplayer,
             gameMode: this.gameMode,
             playerTeams: this.teamCount,

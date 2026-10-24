@@ -114,6 +114,15 @@ export class SendOrderArmyIntentEvent implements GameEvent {
   ) {}
 }
 
+export class SendWarshipCargoIntentEvent implements GameEvent {
+  constructor(
+    public readonly unitId: number,
+    public readonly action: "load" | "unload",
+    public readonly amount: number,
+    public readonly tile: number | null,
+  ) {}
+}
+
 export class SendResearchIntentEvent implements GameEvent {
   constructor(public readonly tech: "bronze_weapons" | "markets") {}
 }
@@ -124,7 +133,6 @@ export class SendExchangeIntentEvent implements GameEvent {
     public readonly amount: number,
   ) {}
 }
-
 
 /**
  * Troops for a counter-attack: the incoming attack's size, capped at what the
@@ -329,6 +337,15 @@ export class Transport {
     this.subscribe(SendAttackIntentEvent, (e) => this.onSendAttackIntent(e));
     this.subscribe(SendOrderArmyIntentEvent, (e) =>
       this.sendIntent({ type: "order_army", unitId: e.unitId, tile: e.tile }),
+    );
+    this.subscribe(SendWarshipCargoIntentEvent, (e) =>
+      this.sendIntent({
+        type: "warship_cargo",
+        unitId: e.unitId,
+        action: e.action,
+        amount: e.amount,
+        tile: e.tile,
+      }),
     );
     this.subscribe(SendResearchIntentEvent, (e) =>
       this.sendIntent({ type: "research", tech: e.tech }),

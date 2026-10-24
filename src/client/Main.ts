@@ -18,8 +18,6 @@ import {
 import { ClientEnv } from "src/client/ClientEnv";
 import { renderNavVersion } from "src/client/GameVersion";
 import { responseHasLinkedIdentity } from "./AccountIdentity";
-import { adGatekeeper } from "./AdGatekeeper";
-import { loadAdmiral, onAdmiralMeasured } from "./Admiral";
 import {
   getUserMe,
   invalidateUserMe,
@@ -113,12 +111,7 @@ import {
 import { fetchMyGameXp, fetchProgressionConfig } from "./ProgressionApi";
 import { startProvisionalProgress } from "./ProvisionalProgress";
 import type { RewardsModal } from "./RewardsModal";
-import {
-  ensureServerList,
-  redirectToGameVersion,
-  setServerListInGame,
-  startServerListPolling,
-} from "./ServerList";
+import { setServerListInGame, startServerListPolling } from "./ServerList";
 import type { SinglePlayerModal } from "./SinglePlayerModal";
 import {
   parseSteamGrantStore,
@@ -127,7 +120,6 @@ import {
   steamGrantEndedDue,
   steamGrantWelcomeDue,
 } from "./SteamGrantNotices";
-import { steamHandoffMode } from "./SteamHandoff";
 import type { SteamHandoffModal } from "./SteamHandoffModal";
 import {
   isSteamLinkHash,
@@ -772,29 +764,10 @@ class Client {
       } else {
         updateAccountNavButton(userMeResponse);
       }
-      const isAdFree =
-        userMeResponse !== false && userMeResponse.player?.adfree === true;
-      window.adsEnabled =
-        !isAdFree && !gamePortal.isOnGamePortal() && !isDesktopShell();
-      syncHashedEmail(userMeResponse, window.adsEnabled).catch((e) =>
+      window.adsEnabled = false;
+      syncHashedEmail(userMeResponse, false).catch((e) =>
         console.warn("Hashed email sync failed", e),
       );
-      // Ad-eligible users only: paid/adfree users must never load Admiral (its
-      // adblock popup fires autonomously once the payload runs). Start watching
-      // adblock state; once a blocker is ever detected the in-game ad is
-      // suppressed forever (persisted) — those users are highly ad-sensitive.
-      if (window.adsEnabled) {
-        loadAdmiral();
-        // Admiral's read is more reliable than our DOM bait, so use it as a
-        // fast initial signal. A blocker that whitelists this site still shows
-        // ads, so "blocked" means adblocking AND not whitelisted.
-        onAdmiralMeasured((res) => {
-          adGatekeeper.seed(
-            res.adblocking === true && res.whitelisted !== true,
-          );
-        });
-        adGatekeeper.start();
-      }
       // Before the dispatch: <username-input> reads this store when it picks
       // the lapse notice's wording, and the record has to be current by then.
       const grantStoreBefore = parseSteamGrantStore(
@@ -1382,26 +1355,11 @@ class Client {
     // Portals carry the invite in their own URL, not our hash.
     if (gamePortal.isOnGamePortal()) {
       const lobbyId = await gamePortal.getInviteGameId();
-      console.log("got game id", lobbyId);
       if (lobbyId && GAME_ID_REGEX.test(lobbyId)) {
-        console.log("game parsed successfully");
-        // Wait 2 seconds to ensure all elements are actually loaded,
-        // On low end-chromebooks the join modal was not registered in time.
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-        whenModalLoaded("join-lobby-modal", () => {
-          window.showPage?.("page-join-lobby");
-          this.joinModal?.open({ lobbyId });
-        });
-        console.log(`Portal: joining lobby ${lobbyId} from invite param`);
+        console.log("Portal invite ignored; solo only");
         return;
       }
     }
-    gamePortal.isInstantMultiplayer().then((isInstant) => {
-      if (isInstant) {
-        console.log(`CrazyGames: joining instant multiplayer lobby`);
-        whenModalLoaded("host-lobby-modal", () => this.hostModal.open());
-      }
-    });
 
     const strip = () =>
       history.replaceState(
@@ -1496,11 +1454,7 @@ class Client {
     if (isReplayShellHost(window.location.hostname)) {
       const replayGameId = window.location.pathname.slice(1);
       if (GAME_ID_REGEX.test(replayGameId)) {
-        whenModalLoaded("join-lobby-modal", () => {
-          window.showPage?.("page-join-lobby");
-          this.joinModal.open({ lobbyId: replayGameId });
-        });
-        console.log(`joining replay ${replayGameId}`);
+        console.log("replay join ignored; solo only");
         return;
       }
     }
@@ -1513,71 +1467,7 @@ class Client {
     const lobbyId =
       pathMatch && GAME_ID_REGEX.test(pathMatch[1]) ? pathMatch[1] : null;
     if (lobbyId) {
-      const handoff =
-        this.steamHandoffDeclinedFor === lobbyId
-          ? "none"
-          : steamHandoffMode(this.userSettings, window.location.search);
-      if (handoff !== "none" && this.steamHandoffModal !== null) {
-        const modal = this.steamHandoffModal;
-        const decline = () => {
-          this.steamHandoffDeclinedFor = lobbyId;
-          void this.handleUrl();
-        };
-        loadModal("steam-handoff-modal").then(
-          () => modal.offer(lobbyId, handoff, decline),
-          (err) => {
-            // Join in the browser rather than leave the link doing nothing.
-            console.error("steam-handoff-modal failed to load:", err);
-            decline();
-          },
-        );
-        return;
-      }
-      // Joining needs the API's server list (multi-server v2): the id's
-      // letter names the game's server there. No version check: joining an
-      // existing game is not starting something new, and the id's letter
-      // names its server whatever version that server runs.
-      await ensureServerList();
-      // A letter this shell's cluster map doesn't know means the map
-      // predates the game's deployment (stale CDN shell, or a link into a
-      // newer fleet). The apex always serves the freshest map, so re-enter
-      // through it; on the apex itself (and dev/desktop) fall through to
-      // the join flow's normal not-found handling.
-      if (this.redirectUnknownLetterToApex(lobbyId)) return;
-      // The game's server may run a different build than this page (a link
-      // into a version still draining, or a page served as `latest` after a
-      // deploy). Open it at that version's page rather than trying to play
-      // it with the wrong bundle. The whole rule -- the loop guard, and the
-      // desktop and replay shells that must never be navigated -- lives in
-      // redirectToGameVersion.
-      if (redirectToGameVersion(lobbyId)) return;
-      // ?host means the lobby creator is returning to a successor lobby they
-      // reused from the win screen: reopen the host view bound to the existing
-      // lobby instead of the join flow. Non-creators who hit this URL still get
-      // treated as normal joiners by the server.
-      const returningAsHost = new URLSearchParams(window.location.search).has(
-        "host",
-      );
-      if (returningAsHost) {
-        // open() reveals the inline page itself (it calls showPage internally).
-        // Calling showPage first would open the modal once with no args and
-        // spuriously create a lobby before this attach call runs.
-        whenModalLoaded("host-lobby-modal", () =>
-          this.hostModal.open({ existingLobbyId: lobbyId }),
-        );
-        console.log(`reopening host lobby ${lobbyId}`);
-        return;
-      }
-      // ?spectate is the watch-only form of the same lobby link, so a cast or
-      // an archive can hand out a URL that never takes a player slot.
-      const spectate = new URLSearchParams(window.location.search).has(
-        "spectate",
-      );
-      whenModalLoaded("join-lobby-modal", () => {
-        window.showPage?.("page-join-lobby");
-        this.joinModal.open({ lobbyId, spectate });
-      });
-      console.log(`${spectate ? "spectating" : "joining"} lobby ${lobbyId}`);
+      console.log("lobby link ignored; solo only");
       return;
     }
     // A shared profile link (`/player/<id>`) opens that profile.
@@ -2003,68 +1893,9 @@ class Client {
     desktopPresence.set({ state: "menu" });
   }
 
-  // An invite lands the player exactly where a /game/<id> link would. The
-  // shell validated the id already; re-checking keeps the invariant next to
-  // the modal that trusts it.
-  private async openInvite(gameId: string): Promise<void> {
-    if (!GAME_ID_REGEX.test(gameId)) return;
-    // An invite can arrive mid-match, unlike the CrazyGames invite this path
-    // was modelled on, which only ever runs at cold start. Force-opening the
-    // join UI would leave it overlaying a game whose socket and render loop
-    // keep running underneath. Same rule the back-button exit uses: stop
-    // silently when the player is not active, ask first when they are, and
-    // drop the invite entirely if they decline.
-    if (this.lobbyHandle !== null) {
-      // stop() without force is the codebase's "is the player actually in
-      // this?" test: it tears the game down and returns true when they are
-      // not, and refuses (returning false) when they are.
-      if (!this.lobbyHandle.stop()) {
-        const confirmed = await showInGameConfirm(
-          translateText("help_modal.exit_confirmation"),
-        );
-        if (!confirmed) return;
-      }
-      // Navigate rather than leaving in place. handleLeaveLobby() was only
-      // ever called during the pre-start lobby wait; every exit from a
-      // STARTED game goes through a full location.href navigation, and it is
-      // that reload -- not handleLeaveLobby -- which restores the started-game
-      // teardown. Two pieces of it have no in-place restore path:
-      // gameModeSelector.stop() (line ~1139/1157) kills the public lobby
-      // socket, whose start() is only ever called from connectedCallback();
-      // and the same block hides every .ad element, which nothing ever
-      // un-hides. Leaving in place therefore stranded the player on a
-      // homepage with a frozen lobby list and no ad rails whenever the join
-      // did not complete -- modal closed, or lobby full/already started.
-      //
-      // Navigating to the lobby's own /game/<id> URL rather than "/" means
-      // the invite survives the reload without needing to be stashed: the
-      // path parser in handleUrl() opens the join modal on the way back up,
-      // which is the same route a shared lobby link takes.
-      // The /w<n>/game/<id> shape only exists on the game-server origin, so
-      // this root-relative navigation must not run on the replay shell host --
-      // it would resolve against replay.<domain>, 404, and lose the invite,
-      // which consumePendingInvite() has already taken. Same guard, for the
-      // same reason, as handleJoinLobby and updateJoinUrlForShare above.
-      //
-      // Not reachable from the desktop shell today: it classifies every
-      // https:// URL as open-externally, so redirectToVersionedShell() hands
-      // the replay host to the OS browser and this window stays on
-      // app://openfront/. That is a policy in a different repo though, and
-      // nothing here would notice if it changed -- so guard rather than depend
-      // on it. On the replay host, fall back to the in-place leave.
-      if (!isReplayShellHost(window.location.hostname)) {
-        this.resetPresenceToMenu();
-        window.location.href = currentPagePath(ClientEnv.gamePath(gameId));
-        return;
-      }
-      await this.handleLeaveLobby();
-    }
-    // The modal loads on demand (see LazyModals).
-    whenModalLoaded("join-lobby-modal", () => {
-      window.showPage?.("page-join-lobby");
-      this.joinModal?.open({ lobbyId: gameId });
-    });
-    console.log(`joining lobby ${gameId} from desktop invite`);
+  // Desktop invites used to open the join modal. Solo is the only start.
+  private async openInvite(_gameId: string): Promise<void> {
+    return;
   }
 
   private updateJoinUrlForShare(lobbyId: string) {

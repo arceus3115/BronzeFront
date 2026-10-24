@@ -4,7 +4,6 @@ import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { ClientID } from "@openfront/engine-api/Schemas";
 import { Config } from "@openfront/engine-lib/configuration/Config";
 import { renderNumber, renderTroops } from "@openfront/engine-lib/Format";
-import { assetUrl } from "@openfront/shared/AssetUrls";
 import { EventBus } from "@openfront/shared/EventBus";
 import { LitElement, html } from "lit";
 import { customElement, state } from "lit/decorators.js";
@@ -18,7 +17,6 @@ import { GameView } from "../../view";
 import { PlayerView } from "../../view/PlayerView";
 import { goldCoinIcon, soldierIcon } from "../HotbarIcons";
 import { TutorialHighlight, TutorialHighlightEvent } from "../Tutorial";
-const swordIcon = assetUrl("images/SwordIcon.svg");
 
 @customElement("control-panel")
 export class ControlPanel extends LitElement implements Controller {
@@ -554,57 +552,7 @@ export class ControlPanel extends LitElement implements Controller {
           <span class="tabular-nums">${renderNumber(this._gold)}</span>
         </div>
       </div>
-      <!-- Row 2: attack ratio | slider -->
-      <div
-        class="flex items-center gap-1.5 ${this.tutorialHighlightClass(
-          "attack_ratio",
-        )}"
-        translate="no"
-      >
-        <div
-          class="flex items-center gap-1 shrink-0 border border-gray-600 rounded-md px-1 py-0.5 text-sm font-bold text-white cursor-pointer w-[8rem]"
-        >
-          <img
-            src=${swordIcon}
-            alt=""
-            aria-hidden="true"
-            width="12"
-            height="12"
-            style="filter: brightness(0) invert(1);"
-          />
-          <span
-            >${(this.attackRatio * 100).toFixed(0)}%
-            (${renderTroops(
-              (this.game?.myPlayer()?.troops() ?? 0) * this.attackRatio,
-            )})</span
-          >
-        </div>
-        <input
-          type="range"
-          min="1"
-          max="100"
-          .value=${String(Math.round(this.attackRatio * 100))}
-          @input=${(e: Event) => this.handleRatioSliderInput(e)}
-          @pointerup=${(e: Event) => this.handleRatioSliderPointerUp(e)}
-          class="flex-1 h-1.5 accent-aquarius cursor-pointer"
-        />
-      </div>
     `;
-  }
-
-  private getMobileAttackRatioLabel(): string {
-    const percent = (this.attackRatio * 100).toFixed(0);
-    const troops = renderTroops(
-      (this.game?.myPlayer()?.troops() ?? 0) * this.attackRatio,
-    );
-    const translated = translateText("control_panel.attack_ratio", {
-      percent,
-      troops,
-    });
-    return translated !== "control_panel.attack_ratio" &&
-      translated.includes(percent)
-      ? translated
-      : `${percent}%\n(${troops})`;
   }
 
   private renderMobile() {
@@ -637,38 +585,6 @@ export class ControlPanel extends LitElement implements Controller {
           )}"
         >
           ${this.renderMobileTroopBar()}
-        </div>
-        <!-- Sword + % and troop count label -->
-        <div class="flex flex-col items-center justify-center shrink-0">
-          <div class="flex items-center gap-0.5">
-            <img
-              src=${swordIcon}
-              alt=""
-              aria-hidden="true"
-              width="10"
-              height="10"
-              style="filter: brightness(0) invert(1);"
-            />
-            <span
-              class="text-white text-[11px] font-bold tabular-nums text-center leading-tight whitespace-pre-wrap"
-              >${this.getMobileAttackRatioLabel()}</span
-            >
-          </div>
-        </div>
-        <!-- Attack ratio slider -->
-        <div
-          class="flex-1 min-w-0 ${this.tutorialHighlightClass("attack_ratio")}"
-          translate="no"
-        >
-          <input
-            type="range"
-            min="1"
-            max="100"
-            .value=${String(Math.round(this.attackRatio * 100))}
-            @input=${(e: Event) => this.handleRatioSliderInput(e)}
-            @pointerup=${(e: Event) => this.handleRatioSliderPointerUp(e)}
-            class="w-full h-1.5 accent-aquarius cursor-pointer"
-          />
         </div>
       </div>
     `;

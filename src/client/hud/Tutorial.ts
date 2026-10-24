@@ -6,7 +6,6 @@ export type TutorialHighlight =
   | "territory"
   | "troops"
   | "troop_rate"
-  | "attack_ratio"
   | "gold"
   | "city"
   | "port"
@@ -97,11 +96,6 @@ export const TUTORIAL_STEPS: readonly TutorialStep[] = [
   },
   { id: "troops", highlight: "troops", manual: true },
   { id: "troop_rate", highlight: "troop_rate", manual: true },
-  {
-    id: "attack_ratio",
-    highlight: "attack_ratio",
-    isDone: (c) => c.attackRatioMoved,
-  },
   // Long-running: stays up (with the nearest tribes marked with the target
   // crosshair) until the player has banked enough gold for the City step.
   {

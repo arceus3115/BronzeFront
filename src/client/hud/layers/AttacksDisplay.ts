@@ -23,7 +23,6 @@ import {
 import {
   CancelAttackIntentEvent,
   CancelBoatIntentEvent,
-  counterAttackTroops,
   SendAttackIntentEvent,
 } from "../../Transport";
 import { UIState } from "../../UIState";
@@ -207,11 +206,7 @@ export class AttacksDisplay extends LitElement implements Controller {
     const myPlayer = this.game.myPlayer();
     if (!myPlayer) return;
 
-    const counterTroops = counterAttackTroops(
-      attack.troops,
-      this.uiState.attackRatio * myPlayer.troops(),
-    );
-    this.eventBus.emit(new SendAttackIntentEvent(attacker.id(), counterTroops));
+    this.eventBus.emit(new SendAttackIntentEvent(attacker.id(), null));
   }
 
   private renderIncomingAttacks() {
@@ -452,9 +447,7 @@ export class AttacksDisplay extends LitElement implements Controller {
     const hasAnything =
       this.outgoingAttacks.length > 0 ||
       this.outgoingLandAttacks.length > 0 ||
-      this.outgoingBoats.length > 0 ||
-      this.incomingAttacks.length > 0 ||
-      this.incomingBoats.length > 0;
+      this.incomingAttacks.length > 0;
 
     if (!hasAnything) {
       return html``;
@@ -465,8 +458,7 @@ export class AttacksDisplay extends LitElement implements Controller {
         class="w-full mb-1 mt-1 sm:mt-0 pointer-events-auto grid grid-cols-2 gap-1 text-white text-sm lg:text-base max-h-[7rem] overflow-y-auto"
       >
         ${this.renderOutgoingAttacks()} ${this.renderOutgoingLandAttacks()}
-        ${this.renderBoats()} ${this.renderIncomingAttacks()}
-        ${this.renderIncomingBoats()}
+        ${this.renderIncomingAttacks()}
       </div>
     `;
   }

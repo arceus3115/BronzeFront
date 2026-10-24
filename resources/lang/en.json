@@ -633,7 +633,6 @@
   "control_panel": {
     "allied_afk_neighbor_info": "You can attack disconnected players even if you are allied with them.",
     "army_limit_warning": "You're near your army limit! Consider sending troops to teammates.",
-    "attack_ratio": "{percent}%\n({troops})",
     "low_troops_warning": "You are very low on troops - You should always keep some troops for defense.",
     "teammate_afk_neighbor_info": "You can attack disconnected teammates.",
     "traitor_neighbor_info": "You can betray traitors without becoming a traitor yourself."
@@ -2466,7 +2465,6 @@
     "step": {
       "alliance_info": "Allies can't attack each other. You can break an alliance at any time — but doing so marks you as a traitor.",
       "attack_nations": "Nations have cut you off from the tribes. Attack a neighboring nation instead — they're stronger than tribes, so bring plenty of troops. The nearest ones are marked with a target. Conquer them until you have {cost} gold for a City.",
-      "attack_ratio": "The attack ratio bar sets how many of your troops are sent out with each attack. Drag the slider to adjust it.",
       "attack_wilderness": "The pulsing ring marks your territory. Click on the unclaimed land next to it to attack and expand.",
       "buy_city": "You can afford a City! Press {key} (or click the City icon under the control panel), then click your territory to place it. Cities raise your max troops.",
       "buy_defense_post": "Now build a Defense Post: press {key}, then click your territory near a border. Attacks on the land around it are much slower and cost the enemy far more troops.",

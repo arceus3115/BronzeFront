@@ -460,8 +460,12 @@ export class UnitPass {
 
       let atlasIdx = this.typeToAtlasCol.get(unit.unitType);
 
-      // Train sub-type resolution: "Train" isn't in UNIT_ORDER.
-      // Resolve to engine/carriage/loaded carriage based on trainType + loaded fields.
+      // Armies and depots are not atlas columns. An army uses the depot body.
+      if (atlasIdx === undefined && unit.unitType === "Army") {
+        atlasIdx = TRAIN_ENGINE_COL;
+      }
+      // "Depot" isn't in UNIT_ORDER. Resolve the car from trainType + loaded.
+
       if (atlasIdx === undefined && unit.unitType === UT_TRAIN) {
         const tt = unit.trainType;
         if (tt === TrainType.Engine || tt === TrainType.TailEngine) {

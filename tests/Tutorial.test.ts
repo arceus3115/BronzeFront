@@ -62,13 +62,6 @@ describe("TutorialProgress", () => {
     expect(p.current()?.id).toBe("troop_rate");
     p.acknowledge();
     settle(p, ctx({ hasSpawned: true, attacking: true }));
-    expect(p.current()?.id).toBe("attack_ratio");
-    // Completed by moving the slider, which only shows up for a single tick.
-    p.update(
-      ctx({ hasSpawned: true, attacking: true, attackRatioMoved: true }),
-    );
-    expect(p.stepDone()).toBe(true);
-    settle(p, ctx({ hasSpawned: true, attacking: true }));
     expect(p.current()?.id).toBe("capture_tribes");
 
     settle(
@@ -158,9 +151,6 @@ describe("TutorialProgress", () => {
     expect(p.current()?.id).toBe("troop_rate");
     expect(p.position(c)).toBe(4);
     p.acknowledge();
-    settle(p, c);
-    expect(p.current()?.id).toBe("attack_ratio");
-    p.update({ ...c, attackRatioMoved: true });
     settle(p, c);
     expect(p.finished()).toBe(true);
     expect(p.current()).toBeNull();

@@ -486,14 +486,6 @@ export class InputHandler {
       },
       (e: KeyboardEvent) => !e.repeat,
     );
-    this.addKeybindAndEvent(this.keybinds.attackRatioDown, () => {
-      const increment = this.userSettings.attackRatioIncrement();
-      this.eventBus.emit(new AttackRatioEvent(-increment));
-    });
-    this.addKeybindAndEvent(this.keybinds.attackRatioUp, () => {
-      const increment = this.userSettings.attackRatioIncrement();
-      this.eventBus.emit(new AttackRatioEvent(increment));
-    });
     this.addKeybindAndEvent("Shift+KeyD", () => {
       this.eventBus.emit(new TogglePerformanceOverlayEvent());
     });

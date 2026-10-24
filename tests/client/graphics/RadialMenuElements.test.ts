@@ -295,7 +295,7 @@ describe("RadialMenuElements", () => {
       expect(deleteMenu).toBeDefined();
     });
 
-    it("should show attack and boat menu on enemy territory", () => {
+    it("should show the attack menu on enemy territory", () => {
       const enemyPlayer = {
         id: () => 2,
         isPlayer: vi.fn(() => true),
@@ -309,7 +309,7 @@ describe("RadialMenuElements", () => {
 
       expect(attackMenu).toBeDefined();
       expect(buildMenu).toBeUndefined();
-      expect(boatMenu).toBeDefined();
+      expect(boatMenu).toBeUndefined();
     });
 
     it("should include info menu in both cases", () => {
@@ -548,7 +548,6 @@ describe("RadialMenuElements", () => {
         false,
       ]);
     });
-
   });
 
   describe("Menu element tooltips", () => {

@@ -1,4 +1,8 @@
-import { UnitType } from "@openfront/engine-api/game/GameTypes";
+import {
+  GameMapSize,
+  GameMapType,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../../src/client/Cosmetics", () => ({
@@ -39,6 +43,9 @@ describe("SinglePlayerModal start", () => {
     // One real unit and one junk entry: the start path must keep only
     // values that are actual UnitTypes.
     modal.disabledUnits = [UnitType.Warship, "Bogus"];
+    modal.selectedMap = GameMapType.Europe;
+    modal.compactMap = true;
+    modal.useRandomMap = true;
 
     await modal.startGame();
 
@@ -47,5 +54,7 @@ describe("SinglePlayerModal start", () => {
     const config = events[0].gameStartInfo.config;
     expect(config.playerTeams).toBe(4);
     expect(config.disabledUnits).toEqual([UnitType.Warship]);
+    expect(config.gameMap).toBe(GameMapType.World);
+    expect(config.gameMapSize).toBe(GameMapSize.Normal);
   });
 });

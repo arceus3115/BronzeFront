@@ -480,7 +480,10 @@ function createMenuElements(
           // amount past x1 there is nothing to choose — return no submenu so
           // the click falls through to an immediate x1 (see action below).
           const myPlayer = params.game.myPlayer();
-          const maxAmount = maxBulkAmount(buildableUnit, myPlayer?.gold() ?? 0n);
+          const maxAmount = maxBulkAmount(
+            buildableUnit,
+            myPlayer?.gold() ?? 0n,
+          );
           if (maxAmount <= 1) {
             return [];
           }
@@ -776,7 +779,7 @@ export const rootMenuElement: MenuElement = {
       ...(isOwnTerritory
         ? [deleteUnitElement, allyRequestElement, buildMenuElement]
         : [
-            isAllied && !isDisconnected ? allyBreakElement : boatMenuElement,
+            isAllied && !isDisconnected ? allyBreakElement : null,
             inExtensionWindow ? allyExtendElement : allyRequestElement,
             showDonateInsteadOfAttack
               ? donateGoldRadialElement

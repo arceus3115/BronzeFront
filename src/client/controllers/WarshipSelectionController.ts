@@ -15,10 +15,20 @@ import {
 } from "../InputHandler";
 import { MapRenderer } from "../render/gl";
 import { TransformHandler } from "../TransformHandler";
-import { MoveWarshipIntentEvent } from "../Transport";
+import {
+  MoveWarshipIntentEvent,
+  SendWarshipCargoIntentEvent,
+} from "../Transport";
 import { GameView, UnitView } from "../view";
 
 const WARSHIP_SELECTION_RADIUS = 10;
+
+/** A selected warship owns the next land click (load or unload). */
+let landClickOwnedByWarship = false;
+
+export function warshipOwnsLandClick(): boolean {
+  return landClickOwnedByWarship;
+}
 
 /**
  * Controller for warship selection state + click handling.
@@ -158,6 +168,32 @@ export class WarshipSelectionController implements Controller {
       );
   }
 
+  /** A selected warship loads on a friendly shore and unloads on owned land. */
+  private cargoOnLand(tile: TileRef): void {
+    const ship = this.selectedUnit;
+    const myPlayer = this.game.myPlayer();
+    if (ship === null || myPlayer === null || !ship.isActive()) return;
+    if (!this.game.isLand(tile) || this.game.isImpassable(tile)) return;
+    const owner = this.game.owner(tile);
+    if (!owner.isPlayer() || owner !== myPlayer) return;
+    const cargo = ship.warshipState().cargo ?? 0;
+    if (cargo > 0) {
+      this.eventBus.emit(
+        new SendWarshipCargoIntentEvent(ship.id(), "unload", 0, tile),
+      );
+      return;
+    }
+    if (!this.game.isShore(tile)) return;
+    this.eventBus.emit(
+      new SendWarshipCargoIntentEvent(
+        ship.id(),
+        "load",
+        myPlayer.troops(),
+        null,
+      ),
+    );
+  }
+
   /**
    * Resolve a left-click in the world:
    *  - multi-selected warships present + clicked water → move them all
@@ -177,7 +213,10 @@ export class WarshipSelectionController implements Controller {
       if (!this.game.isValidCoord(cell.x, cell.y)) return;
       clickRef = this.game.ref(cell.x, cell.y);
     }
-    if (!this.game.isWater(clickRef)) return;
+    if (!this.game.isWater(clickRef)) {
+      this.cargoOnLand(clickRef);
+      return;
+    }
 
     if (this.multiSelectedWarships.length > 0) {
       const myPlayer = this.game.myPlayer();
@@ -225,6 +264,10 @@ export class WarshipSelectionController implements Controller {
       return;
     }
     if (!this.game.isWater(clickRef)) {
+      if (this.selectedUnit) {
+        this.cargoOnLand(clickRef);
+        return;
+      }
       this.eventBus.emit(new ContextMenuEvent(event.x, event.y));
       return;
     }
@@ -314,6 +357,7 @@ export class WarshipSelectionController implements Controller {
 
     if (!event.isSelected) {
       this.view.setSelectedUnits([]);
+      landClickOwnedByWarship = false;
       return;
     }
 
@@ -324,5 +368,6 @@ export class WarshipSelectionController implements Controller {
       this.selectedUnit = event.unit;
       this.view.setSelectedUnits(event.unit ? [event.unit.id()] : []);
     }
+    landClickOwnedByWarship = this.selectedUnit !== null;
   }
 }

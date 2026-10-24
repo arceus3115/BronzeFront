@@ -302,11 +302,10 @@ export function createRenderer(
   immunityTimer.game = game;
   immunityTimer.eventBus = eventBus;
 
-  const inGamePromo = document.querySelector("in-game-promo") as InGamePromo;
-  if (!(inGamePromo instanceof InGamePromo)) {
-    console.error("in-game promo not found");
+  const inGamePromo = document.querySelector("in-game-promo");
+  if (inGamePromo instanceof InGamePromo) {
+    inGamePromo.game = game;
   }
-  inGamePromo.game = game;
 
   const tutorialPanel = document.querySelector(
     "tutorial-panel",
