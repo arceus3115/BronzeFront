@@ -4,6 +4,7 @@ import {
   Difficulty,
   Gold,
   PlayerType,
+  TerraNullius,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
@@ -21,20 +22,15 @@ import type {
   SnapshotWriter,
 } from "../../snapshot/SnapshotContext";
 import { ConstructionExecution } from "../ConstructionExecution";
+import { WarshipCargoExecution } from "../WarshipCargoExecution";
 import {
   EMOJI_WARSHIP_RETALIATION,
   NationEmojiBehavior,
 } from "./NationEmojiBehavior";
 
 export class NationWarshipBehavior {
-  // Track our transport ships we currently own
-  private trackedTransportShips: Set<Unit> = new Set();
   // Track our trade ships we currently own
   private trackedTradeShips: Set<Unit> = new Set();
-  // Track incoming transport ships
-  private trackedIncomingTransportShips: Set<Unit> = new Set();
-  // Track incoming transport ships we have dealt with
-  private dealtWithTransportShip: Set<Unit> = new Set();
 
   constructor(
     private random: PseudoRandom,
@@ -47,10 +43,7 @@ export class NationWarshipBehavior {
     // Sets are iterated in order and may hold dead units.
     const units = (set: Set<Unit>) => [...set].map((u) => w.unit(u));
     return w.versioned(NationWarshipBehaviorSnapshot, {
-      trackedTransportShips: units(this.trackedTransportShips),
       trackedTradeShips: units(this.trackedTradeShips),
-      trackedIncomingTransportShips: units(this.trackedIncomingTransportShips),
-      dealtWithTransportShip: units(this.dealtWithTransportShip),
     });
   }
 
@@ -68,10 +61,7 @@ export class NationWarshipBehavior {
     this.game = r.game;
     this.player = player;
     this.emojiBehavior = emojiBehavior;
-    this.trackedTransportShips = units(s.trackedTransportShips);
     this.trackedTradeShips = units(s.trackedTradeShips);
-    this.trackedIncomingTransportShips = units(s.trackedIncomingTransportShips);
-    this.dealtWithTransportShip = units(s.dealtWithTransportShip);
   }
 
   maybeSpawnWarship(): boolean {
@@ -130,36 +120,99 @@ export class NationWarshipBehavior {
   }
 
   trackShipsAndRetaliate(): void {
-    this.trackTransportShipsAndRetaliate();
     this.trackTradeShipsAndRetaliate();
-    this.trackIncomingTransportsAndRetaliate();
   }
 
-  // Send out a warship if our transport ship got captured
-  private trackTransportShipsAndRetaliate(): void {
-    if (this.game.config().isUnitDisabled(UnitType.TransportShip)) {
-      return;
+  /** A port and a warship waiting on our shore, ready to take troops. */
+  canCarry(): boolean {
+    if (this.game.config().isUnitDisabled(UnitType.Warship)) return false;
+    if (!this.player.units(UnitType.Port).some((port) => port.isActive())) {
+      return false;
     }
-    // Add any currently owned transport ships to our tracking set
-    this.player
-      .units(UnitType.TransportShip)
-      .forEach((u) => this.trackedTransportShips.add(u));
+    return this.carrier() !== null;
+  }
 
-    // Iterate tracked transport ships; if it got destroyed by an enemy:
-    // retaliate. Deleting the current entry while iterating a Set is safe.
-    for (const ship of this.trackedTransportShips) {
-      if (!ship.isActive()) {
-        // Distinguish between arrival/retreat and enemy destruction
-        if (ship.wasDestroyedByEnemy() && ship.destroyer() !== undefined) {
-          this.maybeRetaliateWithWarship(
-            ship.tile(),
-            ship.destroyer()!,
-            "transport",
-          );
+  /** Loads troops and sails the ship to water beside the target's coast. */
+  carryArmy(target: Player | TerraNullius, troops: number): boolean {
+    const ship = this.carrier();
+    if (ship === null || troops < 1) return false;
+    const coast = target.isPlayer()
+      ? this.coastOf(target)
+      : this.nearbyEmptyCoast();
+    if (coast === null) return false;
+    const water = this.waterBeside(coast);
+    if (water === null) return false;
+    this.game.addExecution(
+      new WarshipCargoExecution(this.player, ship.id(), "load", troops, null),
+    );
+    ship.updateWarshipState({ patrolTile: water });
+    return true;
+  }
+
+  private carrier(): Unit | null {
+    for (const ship of this.player.units(UnitType.Warship)) {
+      if (!ship.isActive() || ship.isUnderConstruction()) continue;
+      if ((ship.warshipState().cargo ?? 0) > 0) continue;
+      if (this.besideOwnedLand(ship.tile())) return ship;
+    }
+    return null;
+  }
+
+  private besideOwnedLand(tile: TileRef): boolean {
+    if (this.game.isLand(tile) && this.game.owner(tile) === this.player) {
+      return true;
+    }
+    for (const n of this.game.neighbors(tile)) {
+      if (this.game.isLand(n) && this.game.owner(n) === this.player)
+        return true;
+    }
+    return false;
+  }
+
+  private coastOf(target: Player): TileRef | null {
+    let found: TileRef | null = null;
+    target.borderTiles().forEach((tile) => {
+      if (found !== null) return;
+      if (!this.game.isLand(tile) || this.game.isImpassable(tile)) return;
+      if (this.waterBeside(tile) !== null) found = tile;
+    });
+    return found;
+  }
+
+  private nearbyEmptyCoast(): TileRef | null {
+    const shores: TileRef[] = [];
+    this.player.borderTiles().forEach((tile) => {
+      if (this.game.isShore(tile)) shores.push(tile);
+    });
+    const steps: Array<[number, number]> = [
+      [0, -1],
+      [0, 1],
+      [-1, 0],
+      [1, 0],
+    ];
+    for (const shore of shores) {
+      const x = this.game.x(shore);
+      const y = this.game.y(shore);
+      for (const [dx, dy] of steps) {
+        for (let step = 2; step <= 8; step++) {
+          const nx = x + dx * step;
+          const ny = y + dy * step;
+          if (!this.game.isValidCoord(nx, ny)) break;
+          const tile = this.game.ref(nx, ny);
+          if (!this.game.isLand(tile) || this.game.isImpassable(tile)) continue;
+          if (this.game.hasOwner(tile)) break;
+          if (this.waterBeside(tile) !== null) return tile;
         }
-        this.trackedTransportShips.delete(ship);
       }
     }
+    return null;
+  }
+
+  private waterBeside(tile: TileRef): TileRef | null {
+    for (const n of this.game.neighbors(tile)) {
+      if (this.game.isWater(n)) return n;
+    }
+    return null;
   }
 
   // Send out a warship if our trade ship got captured
@@ -180,82 +233,6 @@ export class NationWarshipBehavior {
         // Ship was ours and is now owned by someone else -> captured
         this.maybeRetaliateWithWarship(ship.tile(), ship.owner(), "trade");
         this.trackedTradeShips.delete(ship);
-      }
-    }
-  }
-
-  private trackIncomingTransportsAndRetaliate(): void {
-    // Add any transports which are targeting us to our tracking map
-    for (const p of this.game.units(UnitType.TransportShip)) {
-      const target = p.targetTile();
-      if (
-        target &&
-        p.isActive() &&
-        !p.transportShipState().isRetreating &&
-        this.game.ownerID(target) === this.player?.smallID() &&
-        p.owner().smallID() !== this.player?.smallID()
-      ) {
-        this.trackedIncomingTransportShips.add(p);
-      }
-    }
-
-    // Deleting the current entry while iterating a Set is safe.
-    for (const transport of this.trackedIncomingTransportShips) {
-      const target = transport.targetTile();
-      if (
-        !transport.isActive() ||
-        target === undefined ||
-        transport.transportShipState().isRetreating
-      ) {
-        this.trackedIncomingTransportShips.delete(transport);
-        this.dealtWithTransportShip.delete(transport);
-        continue;
-      }
-      // Transport has already been dealt with
-      if (this.dealtWithTransportShip.has(transport)) {
-        continue;
-      }
-
-      const distanceToTarget = this.game.manhattanDist(
-        transport.tile(),
-        target,
-      );
-      // Too close to deal with
-      if (distanceToTarget < 20) {
-        this.dealtWithTransportShip.add(transport);
-        continue;
-      }
-
-      // Possible dock snipe counter? Too niche?
-      if (!transport.owner().isAlliedWith(this.player)) {
-        if (
-          this.game.hasUnitNearby(
-            target,
-            90,
-            UnitType.Warship,
-            this.player.id(),
-            true,
-          ) ||
-          this.player.units(UnitType.Warship).filter((p) => {
-            const patrolTile = p.warshipState().patrolTile;
-            return (
-              patrolTile !== undefined &&
-              this.game.manhattanDist(target, patrolTile) < 90
-            );
-          }).length > 0
-        ) {
-          this.dealtWithTransportShip.add(transport);
-          continue;
-        }
-        const oceanTiles = this.warshipSpawnTile(target, 30);
-        if (oceanTiles === null) continue;
-        this.maybeRetaliateWithWarship(
-          oceanTiles,
-          transport.owner(),
-          "transport",
-        );
-        this.dealtWithTransportShip.add(transport);
-        break;
       }
     }
   }
@@ -602,11 +579,11 @@ export class NationWarshipBehavior {
 
 export const NationWarshipBehaviorSnapshot = snapshotType({
   name: "NationWarshipBehavior",
-  version: 1,
+  version: 2,
   schema: z.object({
-    trackedTransportShips: z.array(zRef()),
     trackedTradeShips: z.array(zRef()),
-    trackedIncomingTransportShips: z.array(zRef()),
-    dealtWithTransportShip: z.array(zRef()),
   }),
+  migrations: {
+    1: (d) => ({ trackedTradeShips: d.trackedTradeShips }),
+  },
 });

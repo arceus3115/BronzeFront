@@ -6,7 +6,7 @@ import {
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { AllianceExtensionExecution } from "@openfront/engine/execution/alliance/AllianceExtensionExecution";
 import { AllianceRequestExecution } from "@openfront/engine/execution/alliance/AllianceRequestExecution";
-import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
+import { ArmyExecution } from "@openfront/engine/execution/ArmyExecution";
 import { DeleteUnitExecution } from "@openfront/engine/execution/DeleteUnitExecution";
 import { TribeAttackBehavior } from "@openfront/engine/execution/TribeAttackBehavior";
 import { TribeExecution } from "@openfront/engine/execution/TribeExecution";
@@ -40,8 +40,13 @@ function attackTargets(
 ): (string | null)[] {
   return spy.mock.calls
     .map((c) => c[0])
-    .filter((e): e is AttackExecution => e instanceof AttackExecution)
-    .map((e) => e.targetID());
+    .filter((e): e is ArmyExecution => e instanceof ArmyExecution)
+    .map((e) => {
+      const tile = e.aimedAt();
+      if (typeof tile !== "number") return null;
+      const owner = game.owner(tile);
+      return owner.isPlayer() ? owner.id() : null;
+    });
 }
 
 // The first round only sends the opening attack on free land

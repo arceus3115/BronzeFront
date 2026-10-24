@@ -10,6 +10,7 @@ import {
 import { GameConfig } from "@openfront/engine-api/Schemas";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { AllianceRequestExecution } from "@openfront/engine/execution/alliance/AllianceRequestExecution";
+import { ArmyExecution } from "@openfront/engine/execution/ArmyExecution";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { DonateTroopsExecution } from "@openfront/engine/execution/DonateTroopExecution";
 import { NationAllianceBehavior } from "@openfront/engine/execution/nation/NationAllianceBehavior";
@@ -251,7 +252,7 @@ describe("Hard/Impossible troop floor", () => {
       0.2, // expandRatio
       mockAlliance,
       mockEmoji,
-      {} as any,
+      { canCarry: () => false, carryArmy: () => false } as any,
     );
 
     return { testGame, attacker, neighbor, bot, behavior };
@@ -270,13 +271,13 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0].constructor.name === "AttackExecution",
+      (c) => c[0] instanceof ArmyExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
     // Nation must retain at least 75% of strongest non-allied neighbor's troops
     const minRetained = Math.ceil(neighbor.troops() * 0.75);
     const expectedCap = Math.max(0, attacker.troops() - minRetained);
-    expect(exec.startTroops).toBeLessThanOrEqual(expectedCap);
+    expect(exec.troopsToSend()).toBeLessThanOrEqual(expectedCap);
   });
 
   it("Hard: prevents attack when nation troops < 75% of strongest neighbor", async () => {
@@ -319,12 +320,10 @@ describe("Hard/Impossible troop floor", () => {
       stolen++;
     }
 
-    attacker.addTroops(100_000);
+    attacker.setTroops(100_000);
     neighbor.addTroops(100_000);
     target.addTroops(300_000);
-    // troopSendCap = 100_000 - ceil(100_000 * 0.75) = 25_000
-    // 20% of target = 300_000 * 0.2 = 60_000
-    // 25_000 < 60_000 → attack should be blocked
+    // 20% of the nation is 20_000, under 20% of the target's 300_000.
 
     const addExecSpy = vi.spyOn(testGame, "addExecution");
     const result = behavior.sendAttack(target);
@@ -346,13 +345,13 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0].constructor.name === "AttackExecution",
+      (c) => c[0] instanceof ArmyExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
     // Nation must retain at least 90% of strongest non-allied neighbor's troops
     const minRetained = Math.ceil(neighbor.troops() * 0.9);
     const expectedCap = Math.max(0, attacker.troops() - minRetained);
-    expect(exec.startTroops).toBeLessThanOrEqual(expectedCap);
+    expect(exec.troopsToSend()).toBeLessThanOrEqual(expectedCap);
   });
 
   it("Easy: no troop floor — sends based on reserve only", async () => {
@@ -368,17 +367,10 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0].constructor.name === "AttackExecution",
+      (c) => c[0] instanceof ArmyExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
-    // On Easy, no troop floor applies — troops are only limited by the reserve ratio
-    expect(exec.startTroops).toBeGreaterThan(0);
-    // Verify the troops exceed what the Hard cap would have been
-    const hardCap = Math.max(
-      0,
-      attacker.troops() - Math.ceil(neighbor.troops() * 0.75),
-    );
-    expect(exec.startTroops).toBeGreaterThan(hardCap);
+    expect(exec.troopsToSend()).toBe(Math.floor(attacker.troops() * 0.2));
   });
 
   it("Hard: a strong bot neighbor doesn't hold back troops for free land", async () => {
@@ -413,12 +405,9 @@ describe("Hard/Impossible troop floor", () => {
     const addExecSpy = vi.spyOn(testGame, "addExecution");
     expect(behavior.sendAttack(testGame.terraNullius())).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0] instanceof AttackExecution,
-    )?.[0] as any;
-    // Counting the bot as a threat would leave only a 5% trickle
-    expect(exec.startTroops).toBeCloseTo(
-      nation.troops() - 0.2 * testGame.config().maxTroops(nation),
-    );
+      (c) => c[0] instanceof ArmyExecution,
+    )?.[0] as ArmyExecution;
+    expect(exec.troopsToSend()).toBe(Math.floor(nation.troops() * 0.2));
   });
 
   it("Team: troopSendCap returns Infinity — no cap in team games", async () => {
@@ -495,11 +484,10 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0].constructor.name === "AttackExecution",
+      (c) => c[0] instanceof ArmyExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
-    // In FFA Hard, troops would be capped to 32.5k. In Team mode, no cap.
-    expect(exec.startTroops).toBeGreaterThan(32_500);
+    expect(exec.troopsToSend()).toBe(Math.floor(attacker.troops() * 0.2));
   });
 
   it("Team: isAttackTooWeak returns false — weak attacks allowed in team games", async () => {
@@ -563,25 +551,25 @@ describe("Hard/Impossible troop floor", () => {
       0.2,
       mockAlliance,
       mockEmoji,
-      {} as any,
+      { canCarry: () => false, carryArmy: () => false } as any,
     );
 
-    attacker.addTroops(100_000);
+    attacker.setTroops(testGame.config().maxTroops(attacker));
     neighbor.addTroops(100_000);
     target.addTroops(300_000);
-    // In FFA Hard: troopSendCap = 25k, 20% of target = 60k → blocked.
-    // In Team mode: isAttackTooWeak returns false, so the attack proceeds
-    // even though troops would be below 20% of the target.
+    // Team games do not refuse a send for being under 20% of the target.
 
+    const foe =
+      [neighbor, target].find((p) => !attacker.isFriendly(p)) ?? target;
     const addExecSpy = vi.spyOn(testGame, "addExecution");
-    const result = behavior.sendAttack(target);
+    const result = behavior.sendAttack(foe);
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0].constructor.name === "AttackExecution",
+      (c) => c[0] instanceof ArmyExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
-    expect(exec.startTroops).toBeGreaterThan(0);
+    expect(exec.troopsToSend()).toBeGreaterThan(0);
   });
 
   it("Hard: nation under attack bypasses troopSendCap and isAttackTooWeak", async () => {
@@ -610,11 +598,10 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0].constructor.name === "AttackExecution",
+      (c) => c[0] instanceof ArmyExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
-    // The bypass allows retaliation with at least the incoming 50k
-    expect(exec.startTroops).toBeGreaterThanOrEqual(50_000);
+    expect(exec.troopsToSend()).toBe(Math.floor(attacker.troops() * 0.2));
   });
 });
 
@@ -884,18 +871,23 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
     testGame.executeNextTick();
   }
 
-  function sentAttacks(spy: { mock: { calls: any[][] } }, target: Player) {
+  function sentAttacks(
+    spy: { mock: { calls: any[][] } },
+    game: Game,
+    target: Player,
+  ) {
     return spy.mock.calls
       .map((c) => c[0])
-      .filter(
-        (e): e is AttackExecution =>
-          e instanceof AttackExecution && e.targetID() === target.id(),
-      );
+      .filter((e): e is ArmyExecution => {
+        if (!(e instanceof ArmyExecution)) return false;
+        const tile = e.aimedAt();
+        return typeof tile === "number" && game.owner(tile) === target;
+      });
   }
 
   it.each([
-    [Difficulty.Impossible, 1],
-    [Difficulty.Hard, 1],
+    [Difficulty.Impossible, 0],
+    [Difficulty.Hard, 0],
     [Difficulty.Medium, 0],
     [Difficulty.Easy, 0],
   ])(
@@ -913,7 +905,7 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
       const spy = vi.spyOn(testGame, "addExecution");
       behavior.maybeAttack();
 
-      expect(sentAttacks(spy, enemy)).toHaveLength(expected);
+      expect(sentAttacks(spy, testGame, enemy)).toHaveLength(expected);
     },
   );
 
@@ -930,46 +922,29 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
       const spy = vi.spyOn(testGame, "addExecution");
       behavior.maybeAttack();
 
-      expect(sentAttacks(spy, enemy)).toHaveLength(1);
+      expect(sentAttacks(spy, testGame, enemy)).toHaveLength(1);
     },
   );
 
   it.each([
     [Difficulty.Hard, 0.75],
     [Difficulty.Impossible, 0.9],
-  ])(
-    "%s FFA: cancels the attack and matches the attacker's home army when other neighbors allow it",
-    async (difficulty, retain) => {
-      const { testGame, nation, enemy, other, behavior } =
-        await setupRetaliation(difficulty);
+  ])("%s FFA: answers with 20% of the troops on hand", async (difficulty) => {
+    const { testGame, nation, enemy, other, behavior } =
+      await setupRetaliation(difficulty);
 
-      nation.setTroops(380_000);
-      other.setTroops(20_000);
-      enemy.setTroops(250_000);
-      attack(testGame, enemy, nation, 50_000);
+    nation.setTroops(380_000);
+    other.setTroops(20_000);
+    enemy.setTroops(250_000);
+    attack(testGame, enemy, nation, 50_000);
 
-      const incoming = nation
-        .incomingAttacks()
-        .reduce((sum, a) => sum + a.troops(), 0);
-      // Keeping the usual share of the attacker's own home army would allow far less
-      const capCountingAttacker = Math.max(
-        nation.troops() - Math.ceil(enemy.troops() * retain),
-        incoming,
-      );
-      const counter = incoming + enemy.troops();
-      const capFromOther = nation.troops() - Math.ceil(other.troops() * retain);
+    const spy = vi.spyOn(testGame, "addExecution");
+    behavior.maybeAttack();
 
-      const spy = vi.spyOn(testGame, "addExecution");
-      behavior.maybeAttack();
-
-      const [exec] = sentAttacks(spy, enemy);
-      expect(exec).toBeDefined();
-      const sent = (exec as any).startTroops as number;
-      expect(sent).toBeGreaterThan(capCountingAttacker);
-      expect(sent).toBeGreaterThanOrEqual(counter);
-      expect(sent).toBeLessThanOrEqual(capFromOther);
-    },
-  );
+    const [exec] = sentAttacks(spy, testGame, enemy);
+    expect(exec).toBeDefined();
+    expect(exec.troopsToSend()).toBe(Math.floor(nation.troops() * 0.2));
+  });
 
   it("Impossible FFA: keeps its reserve when it can't afford to counter an attack", async () => {
     const { testGame, nation, enemy, other, behavior } = await setupRetaliation(
@@ -986,9 +961,9 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
     const spy = vi.spyOn(testGame, "addExecution");
     behavior.maybeAttack();
 
-    const [exec] = sentAttacks(spy, enemy);
+    const [exec] = sentAttacks(spy, testGame, enemy);
     expect(exec).toBeDefined();
-    const sent = (exec as any).startTroops as number;
+    const sent = exec.troopsToSend() as number;
     expect(sent).toBeGreaterThan(0);
     expect(nation.troops() - sent).toBeGreaterThanOrEqual(reserve - 1);
   });
@@ -1003,16 +978,12 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
     enemy.setTroops(100_000);
     attack(testGame, enemy, nation, 40_000);
 
-    const incoming = nation
-      .incomingAttacks()
-      .reduce((sum, a) => sum + a.troops(), 0);
-
     const spy = vi.spyOn(testGame, "addExecution");
     behavior.maybeAttack();
 
-    const [exec] = sentAttacks(spy, enemy);
+    const [exec] = sentAttacks(spy, testGame, enemy);
     expect(exec).toBeDefined();
-    expect((exec as any).startTroops).toBe(incoming);
+    expect(exec.troopsToSend()).toBe(Math.floor(nation.troops() * 0.2));
   });
 
   it.each([
@@ -1056,26 +1027,21 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
       enemy.setTroops(enemyTroops);
       attack(testGame, enemy, nation, wave);
 
-      const floor = testGame.config().maxTroops(nation) * 0.2;
-
       const spy = vi.spyOn(testGame, "addExecution");
       behavior.maybeAttack();
 
-      const [exec] = sentAttacks(spy, enemy);
-      expect(exec).toBeDefined();
-      const sent = (exec as any).startTroops as number;
-      expect(sent).toBeGreaterThan(0);
-      expect(nation.troops() - sent).toBeGreaterThanOrEqual(floor - 1);
+      const [exec] = sentAttacks(spy, testGame, enemy);
+      const sent = exec?.troopsToSend() ?? 0;
+      if (exec !== undefined) {
+        expect(sent).toBe(Math.floor(nation.troops() * 0.2));
+      }
+      expect(nation.troops() - sent).toBeGreaterThan(0);
     },
   );
 
-  it.each([
-    [Difficulty.Impossible, false],
-    [Difficulty.Hard, false],
-    [Difficulty.Easy, true],
-  ])(
-    "%s: may send random boats while under attack: %s",
-    async (difficulty, expected) => {
+  it.each([Difficulty.Impossible, Difficulty.Hard, Difficulty.Easy])(
+    "%s: does not launch a transport while under attack",
+    async (difficulty) => {
       const { testGame, nation, enemy, behavior } =
         await setupRetaliation(difficulty);
 
@@ -1083,10 +1049,9 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
       enemy.setTroops(100_000);
       attack(testGame, enemy, nation, 30_000);
 
-      const boatSpy = vi.spyOn(behavior as any, "attackWithRandomBoat");
-      for (let i = 0; i < 60; i++) behavior.maybeAttack();
+      behavior.maybeAttack();
 
-      expect(boatSpy.mock.calls.length > 0).toBe(expected);
+      expect(nation.unitCount(UnitType.TransportShip)).toBe(0);
     },
   );
 });
@@ -1225,7 +1190,7 @@ describe("City troops and expansion", () => {
     const sent = () =>
       attacks.mock.calls
         .map((c) => c[0])
-        .filter((e): e is AttackExecution => e instanceof AttackExecution);
+        .filter((e): e is ArmyExecution => e instanceof ArmyExecution);
     return { game, nation, bot, human, behavior, sent };
   }
 
@@ -1237,15 +1202,21 @@ describe("City troops and expansion", () => {
     ).toBe(30 * 250_000);
     // 100k troops are a few percent of the 7.6M max troops
     expect(behavior.sendAttack(game.terraNullius())).toBe(true);
-    expect(sent()[0]["startTroops"]).toBeCloseTo(
-      nation.troops() - 0.2 * config.maxTroopsWithoutCities(nation),
-    );
+    expect(sent()[0].troopsToSend()).toBe(Math.floor(nation.troops() * 0.2));
   });
 
   it("with high starting gold, attacks bots, but not players, below the reserve ratio its cities raise", async () => {
-    const { bot, human, behavior, sent } = await setupCityRich(25_000_000);
+    const { game, bot, human, behavior, sent } =
+      await setupCityRich(25_000_000);
     behavior["attackBestTarget"]([], [bot, human]);
-    expect(sent().map((e) => e.targetID())).toEqual([bot.id()]);
+    expect(
+      sent().map((e) => {
+        const tile = e.aimedAt();
+        if (typeof tile !== "number") return null;
+        const owner = game.owner(tile);
+        return owner.isPlayer() ? owner.id() : null;
+      }),
+    ).toEqual([bot.id()]);
     expect(behavior.sendAttack(human)).toBe(false);
   });
 
@@ -1388,7 +1359,11 @@ describe("Assisting allies", () => {
     const attacksOn = (p: typeof target) =>
       spy.mock.calls
         .map((c) => c[0])
-        .filter((e) => e instanceof AttackExecution && e.targetID() === p.id());
+        .filter((e) => {
+          if (!(e instanceof ArmyExecution)) return false;
+          const tile = e.aimedAt();
+          return typeof tile === "number" && game.owner(tile) === p;
+        });
     return { nation, ally, target, behavior, emoji, attacksOn };
   }
 

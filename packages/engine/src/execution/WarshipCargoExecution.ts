@@ -2,10 +2,10 @@ import { TileRef } from "@openfront/engine-api/game/GameMap";
 import { UnitType } from "@openfront/engine-api/game/GameTypes";
 import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
-import { WarshipExecution } from "./WarshipExecution";
-import { setArmyTroops } from "./ArmyExecution";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type { ExecRecord } from "../snapshot/SnapshotContext";
+import { marchLandedArmy } from "./ArmyExecution";
+import { WarshipExecution } from "./WarshipExecution";
 
 /**
  * Loads troops onto a warship at a friendly shore, or unloads them as an army.
@@ -63,7 +63,10 @@ export class WarshipCargoExecution implements Execution {
     const cargo = ship.warshipState().cargo ?? 0;
     if (this.action === "load") {
       if (!this.besideFriendlyLand(mg, ship.tile())) return;
-      const take = Math.min(this.player.troops(), Math.max(0, Math.floor(this.amount)));
+      const take = Math.min(
+        this.player.troops(),
+        Math.max(0, Math.floor(this.amount)),
+      );
       if (take <= 0) return;
       this.player.removeTroops(take);
       ship.updateWarshipState({ cargo: cargo + take });
@@ -73,11 +76,7 @@ export class WarshipCargoExecution implements Execution {
     if (!mg.isLand(this.tile) || mg.isImpassable(this.tile)) return;
     if (mg.owner(this.tile) !== this.player) return;
     ship.updateWarshipState({ cargo: 0 });
-    const army = this.player.buildUnit(UnitType.Army, this.tile, {
-      troops: 0,
-      targetTile: this.tile,
-    });
-    setArmyTroops(army.id(), cargo);
+    marchLandedArmy(mg, this.player, this.tile, cargo);
   }
 
   tick(): void {}

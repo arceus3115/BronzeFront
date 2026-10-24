@@ -11,7 +11,6 @@ import {
 } from "@openfront/engine-lib/snapshot/SnapshotType";
 import { findMinimumBy } from "@openfront/engine-lib/Util";
 import { z } from "zod";
-import { setArmyTroops } from "./ArmyExecution";
 import {
   Execution,
   Game,
@@ -33,6 +32,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
+import { marchLandedArmy } from "./ArmyExecution";
 export class WarshipExecution implements Execution {
   private random: PseudoRandom;
   private warship: Unit;
@@ -631,20 +631,26 @@ export class WarshipExecution implements Execution {
     this.warship.updateWarshipState({ isInCombat: true });
   }
 
-  /** Drops carried troops as an army on adjacent friendly or empty land. */
+  /**
+   * Drops carried troops once the ship is beside its patrol tile and that
+   * shore is not our own. Cargo loaded at home stays aboard until then.
+   */
   private unloadCargo(): void {
     const cargo = this.warship.warshipState().cargo ?? 0;
     if (cargo <= 0) return;
+    const patrol = this.warship.warshipState().patrolTile;
+    if (
+      patrol === undefined ||
+      this.mg.manhattanDist(this.warship.tile(), patrol) > 1
+    ) {
+      return;
+    }
     for (const n of this.mg.neighbors(this.warship.tile())) {
       if (!this.mg.isLand(n) || this.mg.isImpassable(n)) continue;
       const owner = this.mg.owner(n);
-      if (owner.isPlayer() && owner !== this.warship.owner()) continue;
+      if (owner.isPlayer() && owner === this.warship.owner()) continue;
       this.warship.updateWarshipState({ cargo: 0 });
-      const army = this.warship.owner().buildUnit(UnitType.Army, n, {
-        troops: 0,
-        targetTile: n,
-      });
-      setArmyTroops(army.id(), cargo);
+      marchLandedArmy(this.mg, this.warship.owner(), n, cargo);
       return;
     }
   }

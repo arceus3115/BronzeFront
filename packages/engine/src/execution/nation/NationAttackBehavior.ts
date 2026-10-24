@@ -5,11 +5,9 @@ import {
   GameMode,
   GameType,
   HumansVsNations,
-  PlayerID,
   PlayerType,
   Relation,
   Structures,
-  TerrainType,
   TerraNullius,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
@@ -20,21 +18,13 @@ import {
   boundingBoxCenter,
   calculateBoundingBoxCenter,
 } from "@openfront/engine-lib/Util";
-import { CHEAPEST_TROOP_RATIO } from "../../configuration/EngineConfig";
-import { Attack, Game, Player, Unit } from "../../game/Game";
-import {
-  canBuildTransportShip,
-  targetTransportTile,
-} from "../../game/TransportShipUtils";
-import { PathFinding } from "../../pathfinding/PathFinder";
+import { Game, Player } from "../../game/Game";
 import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../../snapshot/SnapshotContext";
-import { ArmyExecution } from "../ArmyExecution";
-import { embark } from "../WarshipCargoExecution";
 import { DonateTroopsExecution } from "../DonateTroopExecution";
-import { AiAttackBehavior, BoatRoute } from "../utils/AiAttackBehavior";
+import { AiAttackBehavior } from "../utils/AiAttackBehavior";
 import { planBotAttacks, walledInBots } from "./BotAnnexation";
 import { NationAllianceBehavior } from "./NationAllianceBehavior";
 import {
@@ -60,8 +50,6 @@ function boxGap(a: Box, b: Box): number {
 
 export class NationAttackBehavior extends AiAttackBehavior {
   private botAttackTroopsSent: number = 0;
-  // Our boat attacks (landed beachheads) already followed up by land, while they last
-  private followedLandings: Attack[] = [];
   // Only set during a maybeAttack call: our land neighbors
   private landNeighbors: Set<Player> | null = null;
 
@@ -80,7 +68,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
   }
 
   snapshot(w: SnapshotWriter): Versioned {
-    return this.writeRecord(w, this.botAttackTroopsSent, this.followedLandings);
+    return this.writeRecord(w, this.botAttackTroopsSent, []);
   }
 
   /** Fills a prototype-only shell; only assigns (see README). */
@@ -100,67 +88,33 @@ export class NationAttackBehavior extends AiAttackBehavior {
     // Only set during a maybeAttack call, so always null between ticks.
     this.landNeighbors = null;
     this.botAttackTroopsSent = s.botAttackTroopsSent;
-    this.followedLandings = s.followedLandings.map((i) => r.attack(i));
   }
 
   maybeAttack() {
-    const routes = new Map<Player, BoatRoute | null>();
-    this.boatRoutes = routes;
-    let landFront = false;
+    this.beginDeployments();
     try {
       this.chooseAttack();
-      for (const neighbor of this.landNeighbors ?? []) {
-        if (!this.player.isFriendly(neighbor)) landFront = true;
-      }
     } finally {
       this.landNeighbors = null;
-      this.boatRoutes = null;
-    }
-    this.clearBlockedLane(routes, landFront);
-  }
-
-  // Called every tick. Hard & Impossible boats are beachheads: the moment one lands
-  // (its attack starts at the landing tile), attack its target by land from there, once.
-  // If someone else holds that coast by now, the tile just stays for later attacks.
-  followUpLandings(): void {
-    if (!this.landsBeachheads()) return;
-    const attacks = this.player.outgoingAttacks();
-    this.followedLandings = this.followedLandings.filter((a) =>
-      attacks.includes(a),
-    );
-    for (const attack of attacks) {
-      const landing = attack.sourceTile();
-      if (landing === null || this.followedLandings.includes(attack)) continue;
-      this.followedLandings.push(attack);
-      const target = attack.target();
-      if (!this.holdsLandNextTo(target, landing)) continue;
-      this.sendLandAttack(
-        target,
-        undefined,
-        target.isPlayer() ? target : undefined,
-      );
     }
   }
 
-  private holdsLandNextTo(
-    owner: Player | TerraNullius,
-    tile: TileRef,
-  ): boolean {
-    const n = this.game.neighbors4(tile, this.nbuf);
-    for (let i = 0; i < n; i++) {
-      const t = this.nbuf[i];
-      if (
-        this.game.isLand(t) &&
-        !this.game.isImpassable(t) &&
-        this.game.owner(t) === owner
-      ) {
-        return true;
-      }
-    }
-    return false;
+  protected override prefersCities(): boolean {
+    return true;
+  }
+
+  protected override sendNavalAttack(target: Player | TerraNullius): boolean {
+    const spend = super.calculateAttackTroops(target, () => 0);
+    if (spend === null) return false;
+    if (!this.warshipBehavior.carryArmy(target, spend)) return false;
+    this.troopsCommitted += spend;
+    if (target.isPlayer()) this.emojiBehavior.maybeSendAttackEmoji(target);
+    return true;
   }
 
   private chooseAttack() {
+    if (this.defendBesiegedCity()) return;
+
     // Neighbor visit order matters here: the set's insertion order feeds the
     // stable troop-count sort below, so ties keep border-discovery order.
     const borderingPlayerSet = new Set<Player>();
@@ -196,150 +150,30 @@ export class NationAttackBehavior extends AiAttackBehavior {
 
     // Attack unowned land (direct border or across a river)
     const hasTerraNullius =
-      borderHasTerraNullius ||
-      playerNeighbors.some((n) => !n.isPlayer());
+      borderHasTerraNullius || playerNeighbors.some((n) => !n.isPlayer());
     if (hasTerraNullius) {
       if (this.sendAttack(this.game.terraNullius())) return;
     }
 
-    const holdBoats = this.holdsBoatsUnderAttack();
-    if (borderingEnemies.length === 0) {
-      if (!holdBoats && this.random.chance(5)) {
-        this.attackWithRandomBoat();
-      }
-    } else {
-      if (!holdBoats && this.random.chance(10)) {
-        this.attackWithRandomBoat(borderingEnemies);
-        return;
-      }
-
+    if (borderingEnemies.length > 0) {
       this.allianceBehavior.maybeSendAllianceRequests(borderingEnemies);
     }
 
     this.attackBestTarget(borderingFriends, borderingEnemies);
   }
 
-  private attackWithRandomBoat(borderingEnemies: Player[] = []) {
-    if (this.player === null) throw new Error("not initialized");
-
-    if (this.game.config().isUnitDisabled(UnitType.TransportShip)) {
-      return;
+  /** An army on a friendly city that is already under siege counts as its defense. */
+  private defendBesiegedCity(): boolean {
+    let tile: TileRef | null = null;
+    for (const city of this.player.units(UnitType.City)) {
+      if (!city.isActive() || city.isUnderConstruction()) continue;
+      if (this.game.siegeProgress(city.id()) <= 0) continue;
+      tile = city.tile();
+      break;
     }
-
-    // Check if we've already sent out the maximum number of transport ships
-    if (
-      this.player.unitCount(UnitType.TransportShip) >=
-      this.game.config().boatMaxNumber()
-    ) {
-      return;
-    }
-
-    // Check if we have any shore tiles to launch from
-    const shore = this.shoreTiles(this.player);
-    if (shore.length === 0) {
-      return;
-    }
-
-    const src = this.random.randElement(shore);
-
-    // First look for high-interest targets (unowned or bot-owned). Mainly relevant for earlygame
-    let found = this.findRandomBoatTarget(src, borderingEnemies, true);
-    if (found === null) {
-      // None found? Then look for players
-      found = this.findRandomBoatTarget(src, borderingEnemies, false);
-      if (found === null) {
-        return;
-      }
-    }
-    const { tile: dst, launch } = found;
-    if (this.sail(launch, dst).blocker !== null) return;
-
-    const owner = this.game.owner(dst);
-    if (this.landsBeachheads()) {
-      this.sendBeachhead(owner, dst);
-      return;
-    }
-    const cap = owner.isPlayer()
-      ? this.troopSendCap()
-      : this.expansionTroopCap();
-    const troops = Math.min(this.player.troops() / 5, cap);
-    if (troops < 1) return;
-
-    // Hard & Impossible: don't attack if we'd send less than 20% of target's troops
-    if (owner.isPlayer() && this.isAttackTooWeak(troops, owner)) {
-      return;
-    }
-
-    embark(this.game, this.player, dst, troops);
-  }
-
-  private findRandomBoatTarget(
-    tile: TileRef,
-    borderingEnemies: Player[],
-    highInterestOnly: boolean = false,
-  ): { tile: TileRef; launch: TileRef } | null {
-    if (this.player === null) throw new Error("not initialized");
-    const x = this.game.x(tile);
-    const y = this.game.y(tile);
-    const unreachablePlayers = new Set<PlayerID>();
-    for (let i = 0; i < 500; i++) {
-      const randX = this.random.nextInt(x - 150, x + 150);
-      const randY = this.random.nextInt(y - 150, y + 150);
-      if (!this.game.isValidCoord(randX, randY)) {
-        continue;
-      }
-      const randTile = this.game.ref(randX, randY);
-      if (!this.game.isLand(randTile)) {
-        continue;
-      }
-      if (this.game.isImpassable(randTile)) {
-        continue;
-      }
-      const owner = this.game.owner(randTile);
-      if (owner === this.player) {
-        continue;
-      }
-      // Skip players we already know are unreachable (Performance optimization)
-      if (owner.isPlayer() && unreachablePlayers.has(owner.id())) {
-        continue;
-      }
-      // Don't send boats to players with which we share a border, that usually looks stupid
-      if (owner.isPlayer() && borderingEnemies.includes(owner)) {
-        continue;
-      }
-      // Don't spam boats into players which are stronger than us (FFA only)
-      if (
-        this.isFFA() &&
-        owner.isPlayer() &&
-        owner.troops() > this.player.troops()
-      ) {
-        continue;
-      }
-
-      let matchesCriteria: boolean;
-      if (highInterestOnly) {
-        // High-interest targeting: prioritize unowned tiles or tiles owned by bots
-        matchesCriteria = !owner.isPlayer() || owner.type() === PlayerType.Bot;
-      } else {
-        // Normal targeting: return unowned tiles or tiles owned by non-friendly players
-        matchesCriteria = !owner.isPlayer() || !owner.isFriendly(this.player);
-      }
-      if (!matchesCriteria) {
-        continue;
-      }
-
-      // Validate that we can actually build a transport ship to this target
-      const launch = canBuildTransportShip(this.game, this.player, randTile);
-      if (launch === false) {
-        if (owner.isPlayer()) {
-          unreachablePlayers.add(owner.id());
-        }
-        continue;
-      }
-
-      return { tile: randTile, launch };
-    }
-    return null;
+    if (tile === null) return false;
+    const attacker = this.findIncomingAttackPlayer();
+    return this.commitArmy(attacker ?? this.game.terraNullius(), tile);
   }
 
   // attackBestTarget is called with borderingFriends and borderingEnemies sorted by troops (ascending)
@@ -603,22 +437,6 @@ export class NationAttackBehavior extends AiAttackBehavior {
   }
 
   // Hard & Impossible keep their troops home while under attack, Medium only sometimes
-  private holdsBoatsUnderAttack(): boolean {
-    if (this.findIncomingAttackPlayer() === null) return false;
-    const { difficulty } = this.game.config().gameConfig();
-    switch (difficulty) {
-      case Difficulty.Easy:
-        return false;
-      case Difficulty.Medium:
-        return this.random.chance(2);
-      case Difficulty.Hard:
-      case Difficulty.Impossible:
-        return true;
-      default:
-        assertNever(difficulty);
-    }
-  }
-
   // Cancels the attacker's incoming troops. If we can also match its home army
   // while keeping back what troopSendCap wants for every other neighbor, pushes
   // into its land with at least that much (the attacker isn't a threat then,
@@ -762,12 +580,8 @@ export class NationAttackBehavior extends AiAttackBehavior {
     if (!this.annexesBots()) return;
     const bots = this.neighboringBots();
     if (bots.length === 0) return;
-    const troops = Math.floor(this.player.troops() / 100);
-    if (troops < 1) return;
     for (const bot of walledInBots(this.game, this.player, bots)) {
-      this.game.addExecution(
-        new ArmyExecution(this.player, troops, bot.id()),
-      );
+      this.sendLandAttack(bot);
     }
   }
 
@@ -898,23 +712,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
   }
 
   private findNearestIslandEnemy(): Player | null {
-    if (this.game.config().isUnitDisabled(UnitType.TransportShip)) {
-      return null;
-    }
-
-    // Check if we've already sent out the maximum number of transport ships
-    if (
-      this.player.unitCount(UnitType.TransportShip) >=
-      this.game.config().boatMaxNumber()
-    ) {
-      return null;
-    }
-
-    // Check if we have any shore tiles to launch from
-    const hasShore = Array.from(this.player.borderTiles()).some((t) =>
-      this.game.isShore(t),
-    );
-    if (!hasShore) return null;
+    if (!this.warshipBehavior.canCarry()) return null;
 
     const filteredPlayers = this.game.players().filter((p) => {
       if (p === this.player) return false;
@@ -949,11 +747,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
     // Beachhead boats sail any distance, even past a warship: nothing nearer is left to attack.
     const reachablePlayers: Player[] = [];
     for (const entry of sortedPlayers) {
-      const reachable = this.landsBeachheads()
-        ? this.bordersByLand(entry.player) ||
-          this.boatRoute(entry.player) !== null
-        : this.canReach(entry.player);
-      if (reachable) {
+      if (this.canReach(entry.player)) {
         reachablePlayers.push(entry.player);
         // We only need up to 2 reachable candidates
         if (reachablePlayers.length >= 2) break;
@@ -985,13 +779,8 @@ export class NationAttackBehavior extends AiAttackBehavior {
   }
 
   forceSendAttack(target: Player | TerraNullius) {
-    this.game.addExecution(
-      new ArmyExecution(
-        this.player,
-        this.player.troops() / 2,
-        target.isPlayer() ? target.id() : this.game.terraNullius().id(),
-      ),
-    );
+    this.beginDeployments();
+    this.sendAttack(target, true);
   }
 
   override shouldAttack(other: Player | TerraNullius): boolean {
@@ -1101,114 +890,29 @@ export class NationAttackBehavior extends AiAttackBehavior {
     return Math.max(0, this.player.troops() - minRetained);
   }
 
-  // Like troopSendCap(), but floored above 0 — TerraNullius can't fight back, so it's throttled, not frozen.
-  protected override expansionTroopCap(): number {
-    const cap = this.troopSendCap();
-    if (cap > 0) return cap;
-    return Math.ceil(this.player.troops() * 0.05);
-  }
-
-  // `opponent` is a player we take on on purpose (retaliation, runaway leader):
-  // it doesn't count toward troopSendCap's threats, and troops already
-  // attacking it count toward the too-weak check
+  // Each army is 20% of the troops still on hand. Hard and Impossible still
+  // refuse a send that is under 20% of the target's troops.
   protected override calculateAttackTroops(
     target: Player | TerraNullius,
-    nonBotTroops: (reserveTroops: number) => number,
+    sendTroops: (reserveTroops: number) => number,
     opponent?: Player,
   ): number | null {
-    const reserveTroops = this.reserveTroops(target);
-
-    let troops;
-    const isBotAttack = target.isPlayer() && target.type() === PlayerType.Bot;
-    if (isBotAttack) {
-      troops = this.calculateBotAttackTroops(
-        target,
-        this.player.troops() - reserveTroops - this.botAttackTroopsSent,
-      );
-    } else {
-      troops = nonBotTroops(reserveTroops);
-    }
-
-    // Hard & Impossible: don't drop below neighbor troop threshold (also applies to TerraNullius).
-    troops = Math.min(
-      troops,
-      target.isPlayer()
-        ? this.troopSendCap(opponent)
-        : this.expansionTroopCap(),
-    );
-
-    if (troops < 1) {
-      return null;
-    }
-
-    // Hard & Impossible: don't attack if we'd send less than 20% of target's troops
+    const spend = super.calculateAttackTroops(target, sendTroops, opponent);
+    if (spend === null) return null;
     const pileOn =
       target.isPlayer() && target === opponent
         ? this.incomingTroops(target)
         : 0;
-    if (target.isPlayer() && this.isAttackTooWeak(troops + pileOn, target)) {
+    if (target.isPlayer() && this.isAttackTooWeak(spend + pileOn, target)) {
       return null;
     }
-
     if (target.isPlayer()) {
       this.emojiBehavior.maybeSendAttackEmoji(target);
     }
-
-    // Only count troops that will actually be sent, post-cap.
-    if (isBotAttack) {
-      this.botAttackTroopsSent += troops;
-    }
-
-    return troops;
-  }
-
-  // A beachhead boat is cheap enough to risk past a warship, one at a time
-  protected override sendBoatAttack(target: Player): boolean {
-    if (!this.landsBeachheads()) return super.sendBoatAttack(target);
-    const route = this.boatRoute(target);
-    if (route === null) return false;
-    if (
-      route.blocker !== null &&
-      this.player.unitCount(UnitType.TransportShip) > 0
-    ) {
-      return false;
-    }
-    return this.sendBeachhead(target, route.landing);
-  }
-
-  protected override sendExpansionBoat(tile: TileRef): boolean {
-    if (this.landsBeachheads()) {
-      return this.sendBeachhead(this.game.terraNullius(), tile);
-    }
-    return super.sendExpansionBoat(tile);
-  }
-
-  // Hard & Impossible boat a tiny force and attack by land as soon as it lands
-  private landsBeachheads(): boolean {
-    const { difficulty } = this.game.config().gameConfig();
-    return (
-      difficulty === Difficulty.Hard || difficulty === Difficulty.Impossible
-    );
-  }
-
-  // A 1% boat, if the land attack following its landing would be worth making now
-  private sendBeachhead(
-    target: Player | TerraNullius,
-    landing: TileRef,
-  ): boolean {
-    const troops = this.calculateAttackTroops(
-      target,
-      (targetTroops) => this.player.troops() - targetTroops,
-      target.isPlayer() ? target : undefined,
-    );
-    if (troops === null) return false;
-    const boatTroops = Math.max(1, Math.floor(this.player.troops() / 100));
-    // Only the boat leaves now: the land attack is budgeted once it lands
     if (target.isPlayer() && target.type() === PlayerType.Bot) {
-      this.botAttackTroopsSent += boatTroops - troops;
+      this.botAttackTroopsSent += spend;
     }
-    embark(this.game, this.player, landing, boatTroops);
-    return true;
+    return spend;
   }
 
   private bordersByLand(target: Player): boolean {
@@ -1217,84 +921,19 @@ export class NationAttackBehavior extends AiAttackBehavior {
     );
   }
 
-  // By land, or by a boat that passes no hostile warship and isn't sailing too far
+  /** By land, or across water when a warship can carry an army that far. */
   private canReach(target: Player): boolean {
     if (this.bordersByLand(target)) return true;
-    const route = this.boatRoute(target);
+    if (!this.warshipBehavior.canCarry()) return false;
     return (
-      route !== null &&
-      route.blocker === null &&
-      route.length <= this.maxBoatRoute()
+      boxGap(
+        this.player.largestClusterBoundingBox,
+        target.largestClusterBoundingBox,
+      ) <= this.maxBoatRoute()
     );
   }
 
-  // Tiles a boat sails from launch to the shore at target, and the hostile warship that sinks it.
-  // A warship fires once the boat comes in range; the shell covers 3 tiles a tick (the boat 1),
-  // so a boat landing before the shell can catch it is safe.
-  // Easy doesn't look, Medium checks both shores, Hard & Impossible pathfind.
-  protected override sail(
-    launch: TileRef,
-    target: TileRef,
-    warships: Unit[] = this.hostileWarships(),
-  ): { length: number; blocker: Unit | null } {
-    const landing =
-      targetTransportTile(this.game, this.player, target) ?? target;
-    const direct = this.game.manhattanDist(launch, landing);
-    const { difficulty } = this.game.config().gameConfig();
-    if (difficulty === Difficulty.Easy) {
-      return { length: direct, blocker: null };
-    }
-
-    const path =
-      difficulty === Difficulty.Medium || direct <= 20
-        ? null
-        : PathFinding.Water(this.game).findPath(launch, landing);
-    const route = path ?? [launch, landing];
-    const length = path?.length ?? direct;
-    // Without a path, assume the warship can fire as soon as we launch
-    const sailed = (i: number) => (path === null ? 0 : i);
-
-    const range = this.dangerRange();
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
-    for (const t of route) {
-      minX = Math.min(minX, this.game.x(t));
-      maxX = Math.max(maxX, this.game.x(t));
-      minY = Math.min(minY, this.game.y(t));
-      maxY = Math.max(maxY, this.game.y(t));
-    }
-    for (const w of warships) {
-      const wx = this.game.x(w.tile());
-      const wy = this.game.y(w.tile());
-      if (
-        wx < minX - range ||
-        wx > maxX + range ||
-        wy < minY - range ||
-        wy > maxY + range
-      ) {
-        continue;
-      }
-      for (let i = 0; i < route.length; i++) {
-        if (
-          this.game.euclideanDistSquared(w.tile(), route[i]) >
-          range * range
-        ) {
-          continue;
-        }
-        // Shell and boat close in by at most 4 tiles a tick; 10 tiles spare for its reaction
-        const ticksLeft = length - sailed(i);
-        if (4 * ticksLeft >= this.game.manhattanDist(w.tile(), route[i]) - 10) {
-          return { length, blocker: w };
-        }
-        break;
-      }
-    }
-    return { length, blocker: null };
-  }
-
-  // Hard & Impossible don't sail further than this to attack someone
+  // Hard and Impossible stay within this distance when the only route is water.
   private maxBoatRoute(): number {
     const { difficulty } = this.game.config().gameConfig();
     switch (difficulty) {
@@ -1313,12 +952,7 @@ export class NationAttackBehavior extends AiAttackBehavior {
   // Enemies across the water (not bordering us) whose main territory is within boat range
   // of ours; whether a boat really gets there is left to canReach
   private overseasTargets(borderingEnemies: Player[]): Player[] {
-    if (
-      this.player.unitCount(UnitType.TransportShip) >=
-      this.game.config().boatMaxNumber()
-    ) {
-      return [];
-    }
+    if (!this.warshipBehavior.canCarry()) return [];
     const range = this.maxBoatRoute();
     const ours = this.player.largestClusterBoundingBox;
     return this.game
@@ -1336,133 +970,11 @@ export class NationAttackBehavior extends AiAttackBehavior {
 
   // Hard & Impossible send warships at whatever blocks the juiciest target they couldn't reach.
   // Without a land front any distance counts: the sea is the only way to attack.
-  private clearBlockedLane(
-    routes: Map<Player, BoatRoute | null>,
-    landFront: boolean,
-  ): void {
-    const { difficulty } = this.game.config().gameConfig();
-    if (
-      difficulty !== Difficulty.Hard &&
-      difficulty !== Difficulty.Impossible
-    ) {
-      return;
-    }
-    const maxRoute = this.maxBoatRoute();
-    const blocked = new Map<Player, Unit>();
-    for (const [target, route] of routes) {
-      if (
-        route?.blocker &&
-        (!landFront || route.length <= maxRoute) &&
-        (!this.isFFA() || target.troops() < this.player.troops())
-      ) {
-        blocked.set(target, route.blocker);
-      }
-    }
-    const target = findJuiciestTarget(this.game, [...blocked.keys()]);
-    if (target !== null) {
-      this.warshipBehavior.clearSeaLane(blocked.get(target)!);
-    }
-  }
-
-  private calculateBotAttackTroops(target: Player, maxTroops: number): number {
-    const { difficulty } = this.game.config().gameConfig();
-    switch (difficulty) {
-      case Difficulty.Easy:
-        return maxTroops;
-      case Difficulty.Medium: {
-        let troops = target.troops() * 4;
-
-        // Don't send more troops than maxTroops (Keep reserve)
-        if (troops > maxTroops) {
-          // If we haven't enough troops left to do a big enough bot attack, skip it
-          if (maxTroops < target.troops() * 2) {
-            troops = 0;
-          } else {
-            troops = maxTroops;
-          }
-        }
-        return troops;
-      }
-      case Difficulty.Hard:
-      case Difficulty.Impossible: {
-        // Top up what already attacks the bot, or wait until we can send it all
-        const troops =
-          this.botAttackTroopsNeeded(target) * 1.3 -
-          this.ourStackAgainst(target);
-        return troops <= maxTroops ? troops : 0;
-      }
-      default:
-        assertNever(difficulty);
-    }
-  }
-
   // Keeps the attack at its cheapest loss rate until the bot collapses below 100 tiles
-  private botAttackTroopsNeeded(bot: Player): number {
-    const stack = Math.max(1, bot.troops() / CHEAPEST_TROOP_RATIO);
-    const tiles = Math.max(0, bot.numTilesOwned() - 100);
-    return Math.max(stack, tiles * this.botTileLoss(bot, stack));
-  }
-
   // Troops lost per tile at that stack: Impossible reads the terrain on a 6x6 grid
   // over the bot's land, Hard assumes highland
-  private botTileLoss(bot: Player, stack: number): number {
-    const terrains: TerrainType[] = [];
-    const box = bot.largestClusterBoundingBox;
-    const { difficulty } = this.game.config().gameConfig();
-    if (difficulty === Difficulty.Impossible && box) {
-      const width = box.max.x - box.min.x + 1;
-      const height = box.max.y - box.min.y + 1;
-      for (let i = 0; i < 6; i++) {
-        for (let j = 0; j < 6; j++) {
-          const tile = this.game.ref(
-            box.min.x + Math.floor(((2 * i + 1) * width) / 12),
-            box.min.y + Math.floor(((2 * j + 1) * height) / 12),
-          );
-          if (this.game.ownerID(tile) === bot.smallID()) {
-            terrains.push(this.game.terrainType(tile));
-          }
-        }
-      }
-    }
-    if (terrains.length === 0) terrains.push(TerrainType.Highland);
-    let loss = 0;
-    for (const terrain of terrains) {
-      loss += this.game.config().attackLogic({
-        terrain,
-        attackTroops: stack,
-        attacker: {
-          type: this.player.type(),
-          numTiles: this.player.numTilesOwned(),
-        },
-        defender: {
-          type: bot.type(),
-          numTiles: bot.numTilesOwned(),
-          troops: bot.troops(),
-          isTraitor: bot.isTraitor(),
-          isDisconnectedTeammate: false,
-        },
-        defenderHasDefensePost: false,
-        borderSize: 1,
-      }).attackerTroopLoss;
-    }
-    return loss / terrains.length;
-  }
-
   // Land attacks on the same target merge, so these troops join the next one we send,
   // while the target's attacks on us cancel out against it
-  private ourStackAgainst(target: Player): number {
-    let troops = 0;
-    for (const attack of this.player.outgoingAttacks()) {
-      if (attack.target() === target && attack.sourceTile() === null) {
-        troops += attack.troops();
-      }
-    }
-    for (const attack of this.player.incomingAttacks()) {
-      if (attack.attacker() === target) troops -= attack.troops();
-    }
-    return troops;
-  }
-
   private donateTroops(): boolean {
     // Only donate in team games
     if (this.game.config().gameConfig().gameMode !== GameMode.Team) {

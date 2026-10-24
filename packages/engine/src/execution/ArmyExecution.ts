@@ -43,7 +43,9 @@ export class OrderArmyExecution implements Execution {
   ) {}
 
   init(mg: Game, _ticks: number): void {
-    const unit = this.player.units(UnitType.Army).find((u) => u.id() === this.unitId);
+    const unit = this.player
+      .units(UnitType.Army)
+      .find((u) => u.id() === this.unitId);
     if (unit === undefined || !mg.isLand(this.tile)) return;
     unit.setTargetTile(this.tile);
   }
@@ -74,18 +76,33 @@ export class ArmyExecution implements Execution {
   private army: Unit | undefined;
   private step = 0;
   private troops = 0;
+
+  /** Troops this order will spend once it starts. */
+  troopsToSend(): number {
+    return this.troops;
+  }
+
+  /** Tile, or owner id, this order is aimed at. */
+  aimedAt(): TileRef | string | null {
+    return this.target;
+  }
   private attack: Attack | null = null;
 
   constructor(
     private player: Player,
     troops: number | null,
     private target: TileRef | string | null,
+    private existingUnitId: number | null = null,
   ) {
     this.troops = troops ?? 0;
   }
 
   init(mg: Game, _ticks: number): void {
     this.mg = mg;
+    if (this.existingUnitId !== null) {
+      this.adopt(this.existingUnitId);
+      return;
+    }
     const spend =
       this.troops > 0
         ? Math.min(this.player.troops(), Math.floor(this.troops))
@@ -112,6 +129,30 @@ export class ArmyExecution implements Execution {
       owner.isPlayer() ? owner : this.mg.terraNullius(),
       spend,
       spawn,
+      new Set(),
+    );
+  }
+
+  /** Marches a unit that was already built, without spending troops again. */
+  private adopt(unitId: number): void {
+    const unit = this.player
+      .units(UnitType.Army)
+      .find((u) => u.id() === unitId);
+    if (unit === undefined || !unit.isActive()) {
+      this.active = false;
+      return;
+    }
+    const tile = typeof this.target === "number" ? this.target : unit.tile();
+    this.target = tile;
+    this.army = unit;
+    this.troops = armyTroopCount(unit.id()) || this.troops;
+    armyTroops.set(unit.id(), this.troops);
+    unit.setTargetTile(tile);
+    const owner = this.mg.owner(tile);
+    this.attack = this.player.createAttack(
+      owner.isPlayer() ? owner : this.mg.terraNullius(),
+      this.troops,
+      unit.tile(),
       new Set(),
     );
   }
@@ -169,7 +210,8 @@ export class ArmyExecution implements Execution {
     for (const tile of mine) {
       const n = this.mg.neighbors(tile);
       for (const neighbor of n) {
-        if (!this.mg.isLand(neighbor) || this.mg.isImpassable(neighbor)) continue;
+        if (!this.mg.isLand(neighbor) || this.mg.isImpassable(neighbor))
+          continue;
         if (this.mg.owner(neighbor) !== owner) continue;
         const d = this.mg.manhattanDist(tile, neighbor);
         if (d < bestD) {
@@ -231,21 +273,30 @@ export class ArmyExecution implements Execution {
     if (this.mg.owner(tile) === this.player) return;
     if (!this.mg.isLand(tile) || this.mg.isImpassable(tile)) return;
     this.player.conquer(tile);
-    for (const hit of this.mg.nearbyUnits(
-      tile,
-      1,
-      [UnitType.DefensePost, UnitType.Port, UnitType.Mine, UnitType.Farm],
-    )) {
+    for (const hit of this.mg.nearbyUnits(tile, 1, [
+      UnitType.DefensePost,
+      UnitType.Port,
+      UnitType.Mine,
+      UnitType.Farm,
+    ])) {
       if (hit.unit.tile() !== tile || !hit.unit.isActive()) continue;
-      if (hit.unit.type() === UnitType.DefensePost) hit.unit.delete(true, this.player);
-      else if (hit.unit.owner() !== this.player) this.player.captureUnit(hit.unit);
+      if (hit.unit.type() === UnitType.DefensePost)
+        hit.unit.delete(true, this.player);
+      else if (hit.unit.owner() !== this.player)
+        this.player.captureUnit(hit.unit);
     }
   }
 
   private besiege(city: Unit): void {
     const posts = this.mg
-      .nearbyUnits(city.tile(), this.mg.config().defensePostRange(), UnitType.DefensePost)
-      .filter((h) => h.unit.owner() === city.owner() && h.unit.isActive()).length;
+      .nearbyUnits(
+        city.tile(),
+        this.mg.config().defensePostRange(),
+        UnitType.DefensePost,
+      )
+      .filter(
+        (h) => h.unit.owner() === city.owner() && h.unit.isActive(),
+      ).length;
     let defend = 0;
     for (const hit of this.mg.nearbyUnits(city.tile(), 2, UnitType.Army)) {
       if (hit.unit.owner() !== city.owner()) continue;
@@ -295,13 +346,11 @@ export class ArmyExecution implements Execution {
       target: typeof this.target === "number" ? this.target : 0,
       step: this.step,
       army: this.army !== undefined ? w.unit(this.army) : null,
+      existingUnitId: this.existingUnitId,
     });
   }
 
-  restoreSnapshot(
-    s: z.infer<typeof ArmyStateSchema>,
-    r: SnapshotReader,
-  ): void {
+  restoreSnapshot(s: z.infer<typeof ArmyStateSchema>, r: SnapshotReader): void {
     this.mg = r.game;
     this.active = s.active;
     this.player = r.player(s.player);
@@ -309,8 +358,24 @@ export class ArmyExecution implements Execution {
     this.target = s.target;
     this.step = s.step;
     this.army = s.army === null ? undefined : r.unit(s.army);
+    this.existingUnitId = s.existingUnitId;
     if (this.army !== undefined) armyTroops.set(this.army.id(), this.troops);
   }
+}
+
+/** Drops carried troops on a shore tile and marches that army. */
+export function marchLandedArmy(
+  game: Game,
+  player: Player,
+  tile: TileRef,
+  troops: number,
+): void {
+  const army = player.buildUnit(UnitType.Army, tile, {
+    troops: 0,
+    targetTile: tile,
+  });
+  setArmyTroops(army.id(), troops);
+  game.addExecution(new ArmyExecution(player, troops, tile, army.id()));
 }
 
 const ArmyStateSchema = z.object({
@@ -320,11 +385,15 @@ const ArmyStateSchema = z.object({
   target: zTile(),
   step: z.number(),
   army: z.number().int().nullable(),
+  existingUnitId: z.number().int().nullable(),
 });
 
 export const ArmyExecutionSnapshot = execSnapshotType({
   name: "Army",
-  version: 1,
+  version: 2,
   schema: ArmyStateSchema,
+  migrations: {
+    1: (d) => ({ ...d, existingUnitId: null }),
+  },
   cls: () => ArmyExecution,
 });

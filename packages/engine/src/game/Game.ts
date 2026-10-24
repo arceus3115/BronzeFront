@@ -570,6 +570,8 @@ export interface Game extends GameLike {
     includeUnderConstruction?: boolean,
   ): Array<{ unit: Unit; distSquared: number }>;
 
+  siegeProgress(cityId: number): number;
+
   addExecution(...exec: Execution[]): void;
   displayMessage(
     message: string,

@@ -68,7 +68,7 @@ export class TribeExecution implements Execution {
         this.expandRatio,
       );
 
-      // Send an attack on the first tick
+      this.attackBehavior.beginDeployments();
       this.attackBehavior.sendAttack(this.mg.terraNullius());
       return;
     }
@@ -111,6 +111,7 @@ export class TribeExecution implements Execution {
     if (this.attackBehavior === null) {
       throw new Error("not initialized");
     }
+    this.attackBehavior.beginDeployments();
     const toAttack = this.attackBehavior.getNeighborTraitorToAttack(true);
     if (toAttack !== null) {
       const odds = this.tribe.isFriendly(toAttack) ? 6 : 3;

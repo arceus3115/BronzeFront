@@ -9,6 +9,12 @@ import {
   Structures,
   UnitType,
 } from "@openfront/engine-api/game/GameTypes";
+import {
+  BRONZE_WEAPONS_COST,
+  cityUpgradeFoodCost,
+  EXCHANGE_RATE,
+  MARKETS_COST,
+} from "@openfront/engine-lib/game/BronzeRules";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import {
   readVersioned,
@@ -23,6 +29,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../../snapshot/SnapshotContext";
+import { ExchangeExecution, ResearchExecution } from "../BronzeTechExecution";
 import { ConstructionExecution } from "../ConstructionExecution";
 import { UpgradeStructureExecution } from "../UpgradeStructureExecution";
 import { NationStructurePlacement } from "./NationStructurePlacement";
@@ -223,6 +230,7 @@ export class NationStructureBehavior {
   }
 
   handleStructures(): boolean {
+    this.maybeResearchAndExchange();
     // Defense posts are handled outside the normal pacing/counter system:
     // they don't increment placementsCount or lastStructureTick, and they
     // are never built as the very first structure.
@@ -771,21 +779,18 @@ export class NationStructureBehavior {
     if (structure === null) {
       return false;
     }
+    const amount = this.upgradeAmount(structure.type());
+    if (amount < 1) return false;
     // canUpgradeUnit was already checked by the caller and is checked again in UpgradeStructureExecution
     this.game.addExecution(
-      new UpgradeStructureExecution(
-        this.player,
-        structure.id(),
-        this.upgradeAmount(structure.type()),
-      ),
+      new UpgradeStructureExecution(this.player, structure.id(), amount),
     );
     return true;
   }
 
-  /** One level, or as many as the gold beyond the save-up target pays for and the structure ratios ask for. */
+  /** One level, or as many as the stock beyond the save-up target pays for. Cities spend food. */
   private upgradeAmount(type: UnitType): number {
     const { difficulty } = this.game.config().gameConfig();
-    // Cities set the ratios, so only gold limits them
     const due =
       type === UnitType.City
         ? Infinity
@@ -795,6 +800,17 @@ export class NationStructureBehavior {
             this.placement.hasCoastalTiles(),
           );
     const max = Math.min(MAX_UPGRADES_AT_ONCE[difficulty], due);
+    if (type === UnitType.City) {
+      let spare = this.player.food();
+      let amount = 0;
+      while (amount < max) {
+        const cost = cityUpgradeFoodCost(this.cost(type, amount), spare);
+        if (cost > spare) break;
+        spare -= cost;
+        amount++;
+      }
+      return amount;
+    }
     let spare = this.player.gold() - this.getSaveUpTarget();
     let amount = 0;
     while (amount < max) {
@@ -804,6 +820,89 @@ export class NationStructureBehavior {
       amount++;
     }
     return Math.max(1, amount);
+  }
+
+  /** Bronze weapons, then markets, then an exchange that covers the next bill. */
+  private maybeResearchAndExchange(): void {
+    if (!this.player.hasBronzeWeapons()) {
+      if (this.player.science() >= BRONZE_WEAPONS_COST) {
+        this.game.addExecution(
+          new ResearchExecution(this.player, "bronze_weapons"),
+        );
+      }
+      return;
+    }
+    if (!this.player.hasMarkets()) {
+      if (this.player.science() >= MARKETS_COST) {
+        this.game.addExecution(new ResearchExecution(this.player, "markets"));
+      }
+      return;
+    }
+    this.maybeExchange();
+  }
+
+  private maybeExchange(): void {
+    const foodBill = this.nextCityFoodBill();
+    if (this.player.food() < foodBill) {
+      this.exchange("money_to_food", foodBill - this.player.food());
+      return;
+    }
+    const moneyBill = this.nextMoneyBill();
+    if (moneyBill !== null && this.player.gold() < moneyBill) {
+      const spareFood = this.player.food() - foodBill;
+      this.exchange("food_to_money", moneyBill - this.player.gold(), spareFood);
+    }
+  }
+
+  private nextCityFoodBill(): Gold {
+    const city = this.player
+      .units(UnitType.City)
+      .find(
+        (unit) =>
+          unit.isActive() &&
+          !unit.isUnderConstruction() &&
+          !unit.isMarkedForDeletion(),
+      );
+    if (city === undefined || this.game.config().infiniteFood()) return 0n;
+    return cityUpgradeFoodCost(this.cost(UnitType.City), this.player.food());
+  }
+
+  private nextMoneyBill(): Gold | null {
+    const types = [
+      UnitType.Port,
+      UnitType.Farm,
+      UnitType.Mine,
+      UnitType.DefensePost,
+      UnitType.Warship,
+    ];
+    for (const type of types) {
+      if (this.game.config().isUnitDisabled(type)) continue;
+      const cost = this.cost(type);
+      if (this.player.gold() < cost) return cost;
+    }
+    return null;
+  }
+
+  /**
+   * `gain` is how much of the other resource the bill still needs.
+   * `cap` limits the stock we are willing to spend.
+   */
+  private exchange(
+    direction: "food_to_money" | "money_to_food",
+    gain: Gold,
+    cap?: Gold,
+  ): void {
+    const stock =
+      direction === "money_to_food"
+        ? this.player.gold()
+        : (cap ?? this.player.food());
+    const wanted = gain * EXCHANGE_RATE;
+    const affordable = stock - (stock % EXCHANGE_RATE);
+    const spend = wanted < affordable ? wanted : affordable;
+    if (spend < EXCHANGE_RATE) return;
+    this.game.addExecution(
+      new ExchangeExecution(this.player, direction, Number(spend)),
+    );
   }
 
   /**
