@@ -31,11 +31,6 @@ import { MapLayerController } from "./controllers/MapLayerController";
 import { warshipOwnsLandClick } from "./controllers/WarshipSelectionController";
 import { isDesktopShell } from "./DesktopShell";
 import { GameMetrics } from "./GameMetrics";
-import {
-  ArmyPathOverlay,
-  armyAim,
-  ShowTargetMarkerEvent,
-} from "./hud/ArmyPathOverlay";
 import { createRenderer, GameRenderer } from "./hud/GameRenderer";
 import { InfluenceOverlay } from "./hud/InfluenceOverlay";
 import { goldRateTracker } from "./hud/layers/lib/GoldRateTracker";
@@ -87,7 +82,6 @@ import {
   SendAllianceExtensionIntentEvent,
   SendAllianceRequestIntentEvent,
   SendAttackIntentEvent,
-  SendOrderArmyIntentEvent,
   SendBreakAllianceIntentEvent,
   SendHashEvent,
   SendSpawnIntentEvent,
@@ -625,10 +619,6 @@ function mountWebGLFrameLoop(
     if (firstUnit === undefined) return;
     view.showMoveIndicator(tx, ty, firstUnit.owner().smallID());
   });
-  eventBus.on(ShowTargetMarkerEvent, (e) => {
-    view.showMoveIndicator(e.x, e.y, e.ownerID);
-  });
-
   // Self-driving RAF: syncCamera reads the latest camera state from
   // TransformHandler, pushes it to WebGL, and synchronously invokes the
   // renderer's captured frame callback (which draws). One RAF = one
@@ -639,18 +629,12 @@ function mountWebGLFrameLoop(
     transformHandler,
     glCanvas.parentElement ?? glCanvas,
   );
-  const armyPath = new ArmyPathOverlay(
-    gameView,
-    transformHandler,
-    glCanvas.parentElement ?? glCanvas,
-  );
   eventBus.on(ToggleInfluenceEvent, () => influence.toggle());
 
   const driveFrame = (nowMs: number): void => {
     onFrame(nowMs);
     syncCamera();
     influence.draw();
-    armyPath.draw();
     rafId = requestAnimationFrame(driveFrame);
   };
   rafId = requestAnimationFrame(driveFrame);
@@ -948,9 +932,6 @@ async function createClientGame(
 
 export class ClientGameRunner {
   private myPlayer: PlayerView | null = null;
-  private lastAttackTile = -1;
-  private lastAttackAt = 0;
-  private selectedArmy: number | null = null;
   private isActive = false;
 
   private turnsSeen = 0;
@@ -1288,56 +1269,7 @@ export class ClientGameRunner {
     if (this.gameView.isLand(tile) && warshipOwnsLandClick()) {
       return;
     }
-    const army = this.myPlayer
-      .units(UnitType.Army)
-      .find((unit) => unit.isActive() && unit.tile() === tile);
-    if (army !== undefined && this.selectedArmy === null) {
-      this.selectedArmy = army.id();
-      return;
-    }
-    if (this.selectedArmy !== null) {
-      this.eventBus.emit(new SendOrderArmyIntentEvent(this.selectedArmy, tile));
-      const owner = this.myPlayer.smallID();
-      this.eventBus.emit(
-        new ShowTargetMarkerEvent(
-          this.gameView.x(tile),
-          this.gameView.y(tile),
-          owner,
-        ),
-      );
-      this.selectedArmy = null;
-      armyAim.from = null;
-      armyAim.to = null;
-      return;
-    }
-    const now = performance.now();
-    const double =
-      this.lastAttackTile === tile && now - this.lastAttackAt < 400;
-    this.lastAttackTile = tile;
-    this.lastAttackAt = now;
-    if (!double) return;
-    this.myPlayer
-      .actions(tile, [UnitType.TransportShip])
-      .then((actions) => {
-        if (!actions.canAttack) return;
-        const owner = this.gameView.owner(tile);
-        if (owner.isPlayer() && owner.type() !== PlayerType.Bot) {
-          const name = owner.displayName();
-          if (
-            !window.confirm(
-              translateText("player_panel.confirm_army", { name }),
-            )
-          ) {
-            return;
-          }
-        }
-        this.eventBus.emit(
-          new SendAttackIntentEvent(owner.isPlayer() ? owner.id() : null, null),
-        );
-      })
-      .catch((error) => {
-        console.warn("Failed to check boat attack actions:", error);
-      });
+    this.sendLandAttack(tile);
   }
 
   private autoUpgradeEvent(event: AutoUpgradeEvent) {
@@ -1467,14 +1399,23 @@ export class ClientGameRunner {
       this.myPlayer = myPlayer;
     }
 
-    this.myPlayer
+    this.sendLandAttack(tile);
+  }
+
+  private sendLandAttack(tile: TileRef): void {
+    if (this.myPlayer === null) return;
+    const player = this.myPlayer;
+    player
       .actions(tile, null)
       .then((actions) => {
-        if (actions.canAttack) {
-          this.eventBus.emit(
-            new SendAttackIntentEvent(this.gameView.owner(tile).id(), null),
-          );
-        }
+        if (!actions.canAttack) return;
+        const owner = this.gameView.owner(tile);
+        this.eventBus.emit(
+          new SendAttackIntentEvent(
+            owner.isPlayer() ? owner.id() : null,
+            this.renderer.uiState.attackRatio * player.troops(),
+          ),
+        );
       })
       .catch((error) => {
         console.warn("Failed to check ground attack actions:", error);
@@ -1633,22 +1574,6 @@ export class ClientGameRunner {
 
   private onMouseMove(event: MouseMoveEvent) {
     this.lastMousePosition = { x: event.x, y: event.y };
-    if (this.selectedArmy === null || this.myPlayer === null) {
-      armyAim.from = null;
-      armyAim.to = null;
-      return;
-    }
-    const army = this.myPlayer
-      .units(UnitType.Army)
-      .find((unit) => unit.id() === this.selectedArmy);
-    const tile = this.getTileUnderCursor();
-    if (army === undefined || tile === null) {
-      armyAim.from = null;
-      armyAim.to = null;
-      return;
-    }
-    armyAim.from = army.tile();
-    armyAim.to = tile;
   }
 
   private onConnectionCheck() {

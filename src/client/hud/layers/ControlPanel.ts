@@ -55,6 +55,8 @@ export class ControlPanel extends LitElement implements Controller {
   @state()
   private _goldGainPulseId: number = 0;
   private _goldGainTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  /** Simulation tick whose gold events have already started the popup. */
+  private _goldEventsTick = -1;
 
   @state()
   private _tutorialHighlight: TutorialHighlight | null = null;
@@ -148,34 +150,38 @@ export class ControlPanel extends LitElement implements Controller {
       this._notification = this.computeNotification(player, config);
     }
 
-    const updates = this.game.updatesSinceLastTick();
-    if (updates) {
-      const myID = player.id();
-      const bonusEvents = updates[GameUpdateType.BonusEvent];
-      if (bonusEvents) {
-        for (const ev of bonusEvents) {
-          if (ev.player === myID && ev.gold > 0) {
-            this.addGoldGain(BigInt(ev.gold));
+    const simTick = this.game.ticks();
+    if (simTick !== this._goldEventsTick) {
+      this._goldEventsTick = simTick;
+      const updates = this.game.updatesSinceLastTick();
+      if (updates) {
+        const myID = player.id();
+        const bonusEvents = updates[GameUpdateType.BonusEvent];
+        if (bonusEvents) {
+          for (const ev of bonusEvents) {
+            if (ev.player === myID && ev.gold > 0) {
+              this.addGoldGain(BigInt(ev.gold));
+            }
           }
         }
-      }
-      const conquestEvents = updates[GameUpdateType.ConquestEvent];
-      if (conquestEvents) {
-        for (const ev of conquestEvents) {
-          if (ev.conquerorId === myID && ev.gold > 0n) {
-            this.addGoldGain(ev.gold);
+        const conquestEvents = updates[GameUpdateType.ConquestEvent];
+        if (conquestEvents) {
+          for (const ev of conquestEvents) {
+            if (ev.conquerorId === myID && ev.gold > 0n) {
+              this.addGoldGain(ev.gold);
+            }
           }
         }
-      }
-      const donateEvents = updates[GameUpdateType.DonateEvent];
-      if (donateEvents) {
-        for (const ev of donateEvents) {
-          if (
-            ev.donationType === "gold" &&
-            ev.recipientId === myID &&
-            ev.amount > 0n
-          ) {
-            this.addGoldGain(ev.amount);
+        const donateEvents = updates[GameUpdateType.DonateEvent];
+        if (donateEvents) {
+          for (const ev of donateEvents) {
+            if (
+              ev.donationType === "gold" &&
+              ev.recipientId === myID &&
+              ev.amount > 0n
+            ) {
+              this.addGoldGain(ev.amount);
+            }
           }
         }
       }

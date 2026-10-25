@@ -457,13 +457,11 @@ export class UnitPass {
 
     for (const unit of units.values()) {
       if (!unit.isActive) continue;
+      // Army sprites are gone. A leftover unit from an old match draws nothing.
+      if (unit.unitType === "Army") continue;
 
       let atlasIdx = this.typeToAtlasCol.get(unit.unitType);
 
-      // Armies and depots are not atlas columns. An army uses the depot body.
-      if (atlasIdx === undefined && unit.unitType === "Army") {
-        atlasIdx = TRAIN_ENGINE_COL;
-      }
       // "Depot" isn't in UNIT_ORDER. Resolve the car from trainType + loaded.
 
       if (atlasIdx === undefined && unit.unitType === UT_TRAIN) {

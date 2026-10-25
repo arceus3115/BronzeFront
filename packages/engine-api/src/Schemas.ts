@@ -331,7 +331,10 @@ export const GameConfigSchema = z.object({
       infiniteTroops: z.boolean().optional(),
       goldMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
       foodMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
-      scienceMultiplier: zb.float({ min: 0.1, max: 1000 }).nullable().optional(),
+      scienceMultiplier: zb
+        .float({ min: 0.1, max: 1000 })
+        .nullable()
+        .optional(),
       startingGold: zb.uint({ max: 1000000000 }).nullable().optional(),
       startingFood: zb.uint({ max: 1000000000 }).nullable().optional(),
       startingScience: zb.uint({ max: 1000000000 }).nullable().optional(),
@@ -420,6 +423,8 @@ export const AttackIntentSchema = z.object({
   type: z.literal("attack"),
   targetID: MappedID.nullable(),
   troops: zb.float({ min: 0 }).nullable(),
+  /** Clicked tile. Absent when the order only names an owner. */
+  tile: zb.uint().optional(),
 });
 
 export const SpawnIntentSchema = z.object({

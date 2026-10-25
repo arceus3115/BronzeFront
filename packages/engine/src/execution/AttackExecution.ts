@@ -66,6 +66,11 @@ export class AttackExecution implements Execution {
     return this._targetID;
   }
 
+  /** Troops this order will spend. Null until init fills in the default. */
+  public troopsToSend(): number | null {
+    return this.startTroops;
+  }
+
   activeDuringSpawnPhase(): boolean {
     return false;
   }
@@ -314,7 +319,8 @@ export class AttackExecution implements Execution {
       }
 
       if (this.toConquer.size() === 0) {
-        this.refreshToConquer();
+        // The frontier is exhausted. Rebuilding it draws RNG and walks the
+        // whole border, then retreat discards that work.
         this.retreat();
         return;
       }
@@ -423,6 +429,9 @@ export class AttackExecution implements Execution {
       ) {
         continue;
       }
+      // A tile already queued would be dequeued later and skipped without
+      // spending budget. Do not draw a new priority for it.
+      if (this.attack.borderTiles().has(neighbor)) continue;
       this.attack.addBorderTile(neighbor);
       let numOwnedByMe = 0;
       const numInner = this.map.neighbors4(neighbor, this.nbuf2);
@@ -461,35 +470,7 @@ export class AttackExecution implements Execution {
     const target: Player = this.target;
 
     this.mg.conquerPlayer(this._owner, target);
-
-    const MAX_PASSES = 100;
-    for (let pass = 0; pass < MAX_PASSES; pass++) {
-      let progressed = false;
-      for (const tile of target.tiles()) {
-        let borders = false;
-        this.mg.forEachNeighbor(tile, (t) => {
-          if (!borders && this.mg.owner(t) === this._owner) {
-            borders = true;
-          }
-        });
-        if (borders) {
-          this._owner.conquer(tile);
-          progressed = true;
-        } else {
-          let captured = false;
-          this.mg.forEachNeighbor(tile, (neighbor) => {
-            if (captured) return;
-            const no = this.mg.owner(neighbor);
-            if (no.isPlayer() && no !== target && !no.isFriendly(target)) {
-              this.mg.player(no.id()).conquer(tile);
-              captured = true;
-            }
-          });
-          if (captured) progressed = true;
-        }
-      }
-      if (!progressed) break;
-    }
+    absorbDefenderTiles(this.mg, this._owner, target);
   }
 
   owner(): Player {
@@ -540,6 +521,146 @@ export class AttackExecution implements Execution {
     this.sourceTile = s.sourceTile;
     this.removeTroops = s.removeTroops;
   }
+}
+
+const ABSORB_PASS_LIMIT = 100;
+
+/**
+ * Hands off a defender's remaining tiles once they are under 100.
+ * Matches scanning those tiles in insertion order, up to 100 times:
+ * the attacker takes a tile they touch, otherwise the first non-friendly
+ * neighbor does. A capture is visible to later tiles in that pass.
+ */
+export function absorbDefenderTiles(
+  mg: Game,
+  attacker: Player,
+  target: Player,
+): void {
+  const tiles: TileRef[] = [];
+  for (const tile of target.tiles()) tiles.push(tile);
+  const n = tiles.length;
+  if (n === 0) return;
+
+  const index = new Map<TileRef, number>();
+  for (let i = 0; i < n; i++) index.set(tiles[i], i);
+  const pending = new Uint8Array(n);
+  pending.fill(1);
+  const inList = new Uint8Array(n);
+  const nbuf: TileRef[] = [0, 0, 0, 0];
+  const work: number[] = [];
+  for (let i = 0; i < n; i++) {
+    if (!tileTouchesOther(mg, tiles[i], target, nbuf)) continue;
+    work.push(i);
+    inList[i] = 1;
+  }
+
+  for (let pass = 0; pass < ABSORB_PASS_LIMIT && work.length > 0; pass++) {
+    const next: number[] = [];
+    const nextMark = new Uint8Array(n);
+    let cursor = 0;
+    let progressed = false;
+    while (cursor < work.length) {
+      const i = work[cursor++];
+      inList[i] = 0;
+      if (pending[i] === 0) continue;
+      if (!captureAbsorbedTile(mg, attacker, target, tiles[i], nbuf)) continue;
+      pending[i] = 0;
+      progressed = true;
+      const count = mg.neighbors4(tiles[i], nbuf);
+      for (let k = 0; k < count; k++) {
+        const j = index.get(nbuf[k]);
+        if (j === undefined || pending[j] === 0) continue;
+        if (j > i) {
+          if (inList[j] !== 0) continue;
+          let pos = cursor;
+          while (pos < work.length && work[pos] < j) pos++;
+          if (pos < work.length && work[pos] === j) continue;
+          work.splice(pos, 0, j);
+          inList[j] = 1;
+          continue;
+        }
+        if (nextMark[j] !== 0) continue;
+        next.push(j);
+        nextMark[j] = 1;
+      }
+    }
+    if (!progressed) break;
+    next.sort((a, b) => a - b);
+    work.length = 0;
+    inList.fill(0);
+    for (const j of next) {
+      if (pending[j] === 0) continue;
+      work.push(j);
+      inList[j] = 1;
+    }
+  }
+}
+
+function tileTouchesOther(
+  mg: Game,
+  tile: TileRef,
+  target: Player,
+  nbuf: TileRef[],
+): boolean {
+  const count = mg.neighbors4(tile, nbuf);
+  for (let i = 0; i < count; i++) {
+    if (mg.owner(nbuf[i]) !== target) return true;
+  }
+  return false;
+}
+
+function captureAbsorbedTile(
+  mg: Game,
+  attacker: Player,
+  target: Player,
+  tile: TileRef,
+  nbuf: TileRef[],
+): boolean {
+  if (mg.owner(tile) !== target) return false;
+  const count = mg.neighbors4(tile, nbuf);
+  for (let i = 0; i < count; i++) {
+    if (mg.owner(nbuf[i]) === attacker) {
+      attacker.conquer(tile);
+      return true;
+    }
+  }
+  for (let i = 0; i < count; i++) {
+    const owner = mg.owner(nbuf[i]);
+    if (owner.isPlayer() && owner !== target && !owner.isFriendly(target)) {
+      mg.player(owner.id()).conquer(tile);
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Troops are already off the player. Own the shore, then flood from it.
+ * A foreign shore attacks that owner; a friendly shore attacks the first
+ * foreign neighbor, or unowned land.
+ */
+export function landFromShore(
+  game: Game,
+  player: Player,
+  tile: TileRef,
+  cargo: number,
+): void {
+  if (cargo <= 0) return;
+  const owner = game.owner(tile);
+  let targetId: PlayerID | null =
+    owner.isPlayer() && owner !== player ? owner.id() : null;
+  if (targetId === null) {
+    for (const n of game.neighbors(tile)) {
+      if (!game.isLand(n) || game.isImpassable(n)) continue;
+      const other = game.owner(n);
+      if (other.isPlayer() && other !== player) {
+        targetId = other.id();
+        break;
+      }
+    }
+  }
+  if (owner !== player) player.conquer(tile);
+  game.addExecution(new AttackExecution(cargo, player, targetId, tile, false));
 }
 
 const AttackExecutionStateSchema = z.object({

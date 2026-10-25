@@ -1,3 +1,4 @@
+import { GameUpdateType } from "@openfront/engine-api/game/GameUpdates";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // Side-effect import: the @customElement decorator registers <control-panel>
@@ -54,6 +55,41 @@ describe("control-panel keybind attack ratio and tick visibility", () => {
   it("tick() hides the panel when there is no local player", () => {
     panel.tick();
     expect((panel as any)._isVisible).toBe(false);
+  });
+
+  it("applies a conquest gold popup once per simulation tick", () => {
+    const updates = {
+      [GameUpdateType.ConquestEvent]: [
+        { conquerorId: "me", conqueredId: "them", gold: 40n },
+      ],
+    };
+    panel.game = {
+      inSpawnPhase: () => false,
+      ticks: () => 4,
+      updatesSinceLastTick: () => updates,
+      config: () => ({
+        maxTroops: () => 1000,
+        troopIncreaseRate: () => 1,
+        gameConfig: () => ({
+          gameMode: "Free For All",
+          gameType: "Singleplayer",
+        }),
+        donateTroops: () => false,
+      }),
+      myPlayer: () => ({
+        isAlive: () => true,
+        id: () => "me",
+        gold: () => 10n,
+        troops: () => 100,
+        outgoingAttacks: () => [],
+      }),
+    } as unknown as GameView;
+
+    panel.tick();
+    panel.tick();
+
+    expect((panel as { _goldGainPulseId: number })._goldGainPulseId).toBe(1);
+    expect((panel as { _goldGain: bigint | null })._goldGain).toBe(40n);
   });
 
   it("tick() hides the panel once the local player is dead", () => {

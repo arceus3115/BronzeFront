@@ -1,4 +1,10 @@
-import { PlayerInfo, PlayerType, TerrainType, UnitType } from "@openfront/engine-api/game/GameTypes";
+import { TileRef } from "@openfront/engine-api/game/GameMap";
+import {
+  PlayerInfo,
+  PlayerType,
+  TerrainType,
+  UnitType,
+} from "@openfront/engine-api/game/GameTypes";
 import {
   assignBiomes,
   fallbackBiome,
@@ -6,24 +12,25 @@ import {
   mineWeight,
 } from "@openfront/engine-lib/game/Biome";
 import {
+  armyRadius,
   BRONZE_WEAPONS_COST,
   cityUpgradeFoodCost,
   MARKETS_COST,
 } from "@openfront/engine-lib/game/BronzeRules";
-import { ArmyExecution, armyTroopCount } from "@openfront/engine/execution/ArmyExecution";
-import { WarshipCargoExecution } from "@openfront/engine/execution/WarshipCargoExecution";
-import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
+import { ArmyExecution } from "@openfront/engine/execution/ArmyExecution";
+import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import {
   ExchangeExecution,
   ResearchExecution,
 } from "@openfront/engine/execution/BronzeTechExecution";
 import { PlayerExecution } from "@openfront/engine/execution/PlayerExecution";
+import { WarshipCargoExecution } from "@openfront/engine/execution/WarshipCargoExecution";
+import { WarshipExecution } from "@openfront/engine/execution/WarshipExecution";
 import { GameImpl } from "@openfront/engine/game/GameImpl";
 import { describe, expect, test } from "vitest";
 import { setup } from "./util/Setup";
 
-const human = (id: string) =>
-  new PlayerInfo(id, PlayerType.Human, id, id);
+const human = (id: string) => new PlayerInfo(id, PlayerType.Human, id, id);
 
 describe("biomes", () => {
   test("assigns coast, mountain, forest, lush, plains, and desert", () => {
@@ -122,7 +129,7 @@ describe("resources and technology", () => {
 });
 
 describe("armies, sieges, and influence", () => {
-  test("an army spends 20% and does not capture on the deploy tick", async () => {
+  test("a drop spends 20% and floods the neighboring tile", async () => {
     const game = await setup("plains", {}, [human("a"), human("b")]);
     const a = game.player("a");
     const b = game.player("b");
@@ -131,11 +138,130 @@ describe("armies, sieges, and influence", () => {
     b.conquer(target);
     a.addTroops(100);
     const before = a.troops();
-    game.addExecution(new ArmyExecution(a, null, target));
+    const spend = Math.floor(before * 0.2);
+    game.addExecution(new AttackExecution(spend, a, b.id()));
     game.executeNextTick();
-    expect(a.troops()).toBe(before - Math.floor(before * 0.2));
-    expect(game.owner(target)).toBe(b);
-    expect(a.units(UnitType.Army)).toHaveLength(1);
+    expect(a.troops()).toBe(before - spend);
+    expect(a.units(UnitType.Army)).toHaveLength(0);
+    game.executeNextTick();
+    expect(game.owner(target)).toBe(a);
+  });
+
+  test("the push stays on the army and leaves a far border alone", async () => {
+    const game = await setup("plains", {}, [human("a")]);
+    const player = game.player("a");
+    for (let y = 8; y <= 12; y++) player.conquer(game.ref(0, y));
+    const far = game.ref(40, 40);
+    const farNeighbor = game.ref(41, 40);
+    player.conquer(far);
+    const troops = 10;
+    player.addTroops(troops);
+    const before = new Set<TileRef>();
+    player.tiles().forEach((tile) => before.add(tile));
+    const goal = game.ref(12, 10);
+    game.addExecution(new ArmyExecution(player, troops, goal));
+    game.executeNextTick();
+    const army = player.units(UnitType.Army)[0];
+    const radius = armyRadius(troops);
+    const path: TileRef[] = [army.tile()];
+    for (let i = 0; i < 6; i++) {
+      game.executeNextTick();
+      expect(game.owner(army.tile())).toBe(player);
+      path.push(army.tile());
+    }
+    expect(player.numTilesOwned()).toBeGreaterThan(before.size);
+    expect(game.owner(far)).toBe(player);
+    expect(game.owner(farNeighbor)).not.toBe(player);
+
+    const reached = new Set<TileRef>(before);
+    const queue = [...before];
+    while (queue.length > 0) {
+      const tile = queue.pop()!;
+      for (const neighbor of game.neighbors(tile)) {
+        if (game.owner(neighbor) !== player || reached.has(neighbor)) continue;
+        reached.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+    player.tiles().forEach((tile) => {
+      expect(reached.has(tile)).toBe(true);
+      if (before.has(tile)) return;
+      const near = path.some((at) => {
+        const dx = game.x(tile) - game.x(at);
+        const dy = game.y(tile) - game.y(at);
+        return dx * dx + dy * dy <= radius * radius;
+      });
+      expect(near).toBe(true);
+    });
+  });
+
+  test("a straight push is wider than the trail of one tile", async () => {
+    const game = await setup("plains", {}, [human("a")]);
+    const player = game.player("a");
+    for (let y = 8; y <= 12; y++) player.conquer(game.ref(0, y));
+    const troops = 10;
+    player.addTroops(troops);
+    const radius = armyRadius(troops);
+    const before = new Set<TileRef>();
+    player.tiles().forEach((tile) => before.add(tile));
+    game.addExecution(new ArmyExecution(player, troops, game.ref(8, 10)));
+    game.executeNextTick();
+    for (let i = 0; i < 6; i++) game.executeNextTick();
+    const army = player.units(UnitType.Army)[0];
+    expect(game.owner(army.tile())).toBe(player);
+    let minY = Infinity;
+    let maxY = -Infinity;
+    player.tiles().forEach((tile) => {
+      if (before.has(tile)) return;
+      const y = game.y(tile);
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    });
+    expect(maxY - minY).toBeGreaterThanOrEqual(2 * radius);
+  });
+
+  test("arrival fills the disk and leaves a far border alone", async () => {
+    const game = await setup("plains", {}, [human("a")]);
+    const player = game.player("a");
+    for (let y = 8; y <= 12; y++) player.conquer(game.ref(0, y));
+    const far = game.ref(40, 40);
+    player.conquer(far);
+    const troops = 10;
+    player.addTroops(troops);
+    const radius = armyRadius(troops);
+    const goal = game.ref(1, 10);
+    game.addExecution(new ArmyExecution(player, troops, goal));
+    game.executeNextTick();
+    for (let i = 0; i < 16; i++) game.executeNextTick();
+    const army = player.units(UnitType.Army)[0];
+    expect(army.tile()).toBe(goal);
+    expect(game.owner(army.tile())).toBe(player);
+    expect(game.owner(game.ref(41, 40))).not.toBe(player);
+    const ax = game.x(army.tile());
+    const ay = game.y(army.tile());
+    const limit = radius * radius;
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy > limit) continue;
+        const x = ax + dx;
+        const y = ay + dy;
+        if (!game.isValidCoord(x, y)) continue;
+        const tile = game.ref(x, y);
+        if (!game.isLand(tile) || game.isImpassable(tile)) continue;
+        let touches = false;
+        for (const neighbor of game.neighbors(tile)) {
+          if (game.owner(neighbor) === player) touches = true;
+        }
+        if (!touches && game.owner(tile) !== player) continue;
+        expect(game.owner(tile)).toBe(player);
+      }
+    }
+  });
+
+  test("a larger stack conquers more land in the same time", async () => {
+    const small = await conqueredBy(10, 4);
+    const large = await conqueredBy(900, 4);
+    expect(large).toBeGreaterThan(small);
   });
 
   test("mountain and forest advance fewer tiles than plains", async () => {
@@ -203,7 +329,9 @@ describe("armies, sieges, and influence", () => {
     posted.executeNextTick();
     expect(posted.owner(postCityTile)).toBe(pb);
     expect(postCity.owner()).toBe(pb);
-    expect((posted as GameImpl).siegeProgress(postCity.id())).toBeGreaterThan(0);
+    expect((posted as GameImpl).siegeProgress(postCity.id())).toBeGreaterThan(
+      0,
+    );
   });
 
   test("influence expands a strong border and cedes a negative one", async () => {
@@ -258,24 +386,48 @@ describe("warships", () => {
     expect(game.units(UnitType.Warship)).toHaveLength(2);
   });
 
-  test("loading and unloading moves troops onto and off an army", async () => {
+  test("loading and unloading moves troops onto a shore attack", async () => {
     const game = await setup("plains", { instantBuild: true }, [human("a")]);
     const player = game.player("a");
     const shore = game.ref(6, 6);
     player.conquer(shore);
-    const ship = player.buildUnit(UnitType.Warship, shore, { patrolTile: shore });
+    const ship = player.buildUnit(UnitType.Warship, shore, {
+      patrolTile: shore,
+    });
     player.addTroops(40);
     const before = player.troops();
-    new WarshipCargoExecution(player, ship.id(), "load", 40, null).init(game, 0);
+    new WarshipCargoExecution(player, ship.id(), "load", 40, null).init(
+      game,
+      0,
+    );
     expect(player.troops()).toBe(before - 40);
     expect(ship.warshipState().cargo).toBe(40);
-    new WarshipCargoExecution(player, ship.id(), "unload", 0, shore).init(game, 0);
+    new WarshipCargoExecution(player, ship.id(), "unload", 0, shore).init(
+      game,
+      0,
+    );
     expect(ship.warshipState().cargo).toBe(0);
-    const army = player.units(UnitType.Army)[0];
-    expect(army).toBeDefined();
-    expect(armyTroopCount(army.id())).toBe(40);
+    expect(player.units(UnitType.Army)).toHaveLength(0);
+    game.executeNextTick();
+    const attack = player
+      .outgoingAttacks()
+      .find((a) => a.sourceTile() === shore);
+    expect(attack).toBeDefined();
+    expect(attack!.troops()).toBe(40);
   });
 });
+
+async function conqueredBy(troops: number, ticks: number): Promise<number> {
+  const game = await setup("plains", {}, [human("a")]);
+  const player = game.player("a");
+  for (let y = 8; y <= 12; y++) player.conquer(game.ref(0, y));
+  const start = player.numTilesOwned();
+  player.addTroops(troops);
+  game.addExecution(new ArmyExecution(player, troops, game.ref(18, 10)));
+  game.executeNextTick();
+  for (let i = 0; i < ticks; i++) game.executeNextTick();
+  return player.numTilesOwned() - start;
+}
 
 async function marched(biome: TerrainType): Promise<number> {
   const game = await setup("plains", {}, [human("a")]);

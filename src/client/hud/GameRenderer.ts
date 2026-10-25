@@ -318,7 +318,7 @@ export function createRenderer(
   tutorialPanel.userSettings = userSettings;
   tutorialPanel.uiState = uiState;
 
-  const layers: Controller[] = [
+  const layers: (Controller | null)[] = [
     new WarshipSelectionController(game, eventBus, transformHandler, view),
     new BuildPreviewController(
       game,
@@ -364,7 +364,7 @@ export function createRenderer(
     playerPanel,
     headsUpMessage,
     multiTabModal,
-    inGamePromo,
+    inGamePromo instanceof InGamePromo ? inGamePromo : null,
     tutorialPanel,
     alertFrame,
     performanceOverlay,
@@ -384,7 +384,7 @@ export class GameRenderer {
   constructor(
     public transformHandler: TransformHandler,
     public uiState: UIState,
-    private layers: Controller[],
+    private layers: (Controller | null)[],
     private performanceOverlay: PerformanceOverlay,
   ) {}
 
@@ -393,7 +393,10 @@ export class GameRenderer {
       console.warn("Failed to preload sprites:", err),
     );
 
-    this.layers.forEach((l) => l.init?.());
+    for (const layer of this.layers) {
+      if (layer == null) continue;
+      layer.init?.();
+    }
 
     window.addEventListener("resize", () =>
       this.transformHandler.updateCanvasBoundingRect(),
@@ -410,7 +413,7 @@ export class GameRenderer {
     const tickLayerDurations: Record<string, number> = {};
 
     for (const layer of this.layers) {
-      if (!layer.tick) {
+      if (layer == null || !layer.tick) {
         continue;
       }
 

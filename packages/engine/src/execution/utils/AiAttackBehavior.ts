@@ -19,7 +19,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../../snapshot/SnapshotContext";
-import { ArmyExecution } from "../ArmyExecution";
+import { AttackExecution } from "../AttackExecution";
 import { hasHighStartingGold } from "../nation/NationUtils";
 
 /** How tribes and nations send armies. Nations sail; tribes stay on land. */
@@ -184,24 +184,21 @@ export abstract class AiAttackBehavior {
     sendTroops = (_reserveTroops: number) => 0,
     opponent?: Player,
   ): boolean {
-    return this.commitArmy(
-      target,
-      this.attackTile(target),
-      sendTroops,
-      opponent,
-    );
+    return this.commitArmy(target, undefined, sendTroops, opponent);
   }
 
   protected commitArmy(
     target: Player | TerraNullius,
-    tile: TileRef,
+    _tile: TileRef | undefined,
     sendTroops = (_reserveTroops: number) => 0,
     opponent?: Player,
   ): boolean {
     const troops = this.calculateAttackTroops(target, sendTroops, opponent);
     if (troops === null) return false;
     this.troopsCommitted += troops;
-    this.game.addExecution(new ArmyExecution(this.player, troops, tile));
+    this.game.addExecution(
+      new AttackExecution(troops, this.player, target.id()),
+    );
     return true;
   }
 
@@ -264,8 +261,8 @@ export abstract class AiAttackBehavior {
     }
     if (best !== null) return best;
     if (fallback !== null) return fallback;
-    const borders = this.player.borderTiles();
-    return borders.size > 0 ? [...borders][0]! : 0;
+    for (const tile of this.player.borderTiles()) return tile;
+    return 0;
   }
 
   private tileHasCity(tile: TileRef): boolean {

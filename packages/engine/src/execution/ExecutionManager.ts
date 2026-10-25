@@ -11,13 +11,8 @@ import { AllianceExtensionExecution } from "./alliance/AllianceExtensionExecutio
 import { AllianceRejectExecution } from "./alliance/AllianceRejectExecution";
 import { AllianceRequestExecution } from "./alliance/AllianceRequestExecution";
 import { BreakAllianceExecution } from "./alliance/BreakAllianceExecution";
-import { ArmyExecution, OrderArmyExecution } from "./ArmyExecution";
 import { AttackExecution } from "./AttackExecution";
-import {
-  ExchangeExecution,
-  ResearchExecution,
-} from "./BronzeTechExecution";
-import { WarshipCargoExecution } from "./WarshipCargoExecution";
+import { ExchangeExecution, ResearchExecution } from "./BronzeTechExecution";
 import { ConstructionExecution } from "./ConstructionExecution";
 import { DeleteUnitExecution } from "./DeleteUnitExecution";
 import { DonateGoldExecution } from "./DonateGoldExecution";
@@ -37,6 +32,7 @@ import { TargetPlayerExecution } from "./TargetPlayerExecution";
 import { TribeSpawner } from "./TribeSpawner";
 import { UpgradeStructureExecution } from "./UpgradeStructureExecution";
 import { PlayerSpawner } from "./utils/PlayerSpawner";
+import { WarshipCargoExecution } from "./WarshipCargoExecution";
 
 export class Executor {
   // private random = new PseudoRandom(999)
@@ -70,15 +66,11 @@ export class Executor {
 
     // create execution
     switch (intent.type) {
-      case "attack": {
-        return new ArmyExecution(
-          player,
-          intent.troops,
-          intent.targetID ?? this.mg.terraNullius().id(),
-        );
-      }
+      case "attack":
+        // The clicked tile is not a source. The flood starts from the border.
+        return new AttackExecution(intent.troops, player, intent.targetID);
       case "order_army":
-        return new OrderArmyExecution(player, intent.unitId, intent.tile);
+        return new NoOpExecution();
       case "research":
         return new ResearchExecution(player, intent.tech);
       case "exchange":

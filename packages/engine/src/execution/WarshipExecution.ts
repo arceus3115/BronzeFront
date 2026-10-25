@@ -32,7 +32,7 @@ import type {
   SnapshotReader,
   SnapshotWriter,
 } from "../snapshot/SnapshotContext";
-import { marchLandedArmy } from "./ArmyExecution";
+import { landFromShore } from "./AttackExecution";
 export class WarshipExecution implements Execution {
   private random: PseudoRandom;
   private warship: Unit;
@@ -650,7 +650,7 @@ export class WarshipExecution implements Execution {
       const owner = this.mg.owner(n);
       if (owner.isPlayer() && owner === this.warship.owner()) continue;
       this.warship.updateWarshipState({ cargo: 0 });
-      marchLandedArmy(this.mg, this.warship.owner(), n, cargo);
+      landFromShore(this.mg, this.warship.owner(), n, cargo);
       return;
     }
   }

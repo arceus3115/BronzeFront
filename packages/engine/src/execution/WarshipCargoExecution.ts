@@ -4,7 +4,7 @@ import { z } from "zod";
 import { Execution, Game, Player } from "../game/Game";
 import { execSnapshotType } from "../snapshot/ExecutionSnapshot";
 import type { ExecRecord } from "../snapshot/SnapshotContext";
-import { marchLandedArmy } from "./ArmyExecution";
+import { landFromShore } from "./AttackExecution";
 import { WarshipExecution } from "./WarshipExecution";
 
 /**
@@ -76,7 +76,7 @@ export class WarshipCargoExecution implements Execution {
     if (!mg.isLand(this.tile) || mg.isImpassable(this.tile)) return;
     if (mg.owner(this.tile) !== this.player) return;
     ship.updateWarshipState({ cargo: 0 });
-    marchLandedArmy(mg, this.player, this.tile, cargo);
+    landFromShore(mg, this.player, this.tile, cargo);
   }
 
   tick(): void {}

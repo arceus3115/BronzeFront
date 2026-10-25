@@ -8,7 +8,7 @@ import {
   MARKETS_COST,
 } from "@openfront/engine-lib/game/BronzeRules";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
-import { ArmyExecution } from "@openfront/engine/execution/ArmyExecution";
+import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import {
   ExchangeExecution,
   ResearchExecution,
@@ -40,7 +40,7 @@ function nationBehavior(game: Game, player: Player): NationAttackBehavior {
 }
 
 describe("bronze bot behavior", () => {
-  it("sends an army of 20% and does not spawn a transport", async () => {
+  it("sends a border attack of 20% and does not spawn a transport", async () => {
     const game = await setup("big_plains", {}, [
       new PlayerInfo("nation", PlayerType.Nation, null, "nation"),
       new PlayerInfo("enemy", PlayerType.Human, null, "enemy"),
@@ -58,13 +58,14 @@ describe("bronze bot behavior", () => {
 
     const army = spy.mock.calls
       .map((c) => c[0])
-      .find((e): e is ArmyExecution => e instanceof ArmyExecution);
+      .find((e): e is AttackExecution => e instanceof AttackExecution);
     expect(army).toBeDefined();
     expect(army!.troopsToSend()).toBe(Math.floor(nation.troops() * 0.2));
     expect(nation.unitCount(UnitType.TransportShip)).toBe(0);
+    expect(nation.units(UnitType.Army)).toHaveLength(0);
   });
 
-  it("aims a nation at the enemy city and a tribe at open land", async () => {
+  it("sends a border attack at the enemy and keeps a tribe off the water", async () => {
     const game = await setup("big_plains", {}, [
       new PlayerInfo("nation", PlayerType.Nation, null, "nation"),
       new PlayerInfo("tribe", PlayerType.Bot, null, "tribe"),
@@ -91,7 +92,7 @@ describe("bronze bot behavior", () => {
     const nationArmy = sentArmy(game, () =>
       nationBehavior(game, nation).sendAttack(enemy),
     );
-    expect(nationArmy.aimedAt()).toBe(cityTile);
+    expect(nationArmy.targetID()).toBe(enemy.id());
 
     const tribeBehavior = new TribeAttackBehavior(
       new PseudoRandom(1),
@@ -105,8 +106,7 @@ describe("bronze bot behavior", () => {
       tribeBehavior.beginDeployments();
       return tribeBehavior.sendAttack(enemy);
     });
-    expect(tribeArmy.aimedAt()).not.toBe(cityTile);
-    expect(game.owner(tribeArmy.aimedAt() as number)).toBe(enemy);
+    expect(tribeArmy.targetID()).toBe(enemy.id());
     expect(tribe.units(UnitType.Warship)).toHaveLength(0);
     const research = vi.spyOn(game, "addExecution");
     tribeBehavior.sendAttack(enemy);
@@ -179,7 +179,7 @@ describe("bronze bot behavior", () => {
     ).toBe(false);
   });
 
-  it("keeps warship cargo at home and lands an army on the far coast", async () => {
+  it("keeps warship cargo at home and floods the far coast", async () => {
     const game = await setup("half_land_half_ocean", {}, [
       new PlayerInfo("nation", PlayerType.Nation, null, "nation"),
     ]);
@@ -203,22 +203,25 @@ describe("bronze bot behavior", () => {
     );
     ship.move(far.water);
     ship.updateWarshipState({ patrolTile: far.water });
+    const landed = vi.spyOn(game, "addExecution");
     exec.tick(2);
     game.executeNextTick();
 
     expect(ship.warshipState().cargo).toBe(0);
-    const army = nation.units(UnitType.Army)[0];
-    expect(army).toBeDefined();
-    expect(army.tile()).toBe(far.land);
+    expect(nation.units(UnitType.Army)).toHaveLength(0);
+    expect(game.owner(far.land)).toBe(nation);
+    expect(landed.mock.calls.some((c) => c[0] instanceof AttackExecution)).toBe(
+      true,
+    );
   });
 });
 
-function sentArmy(game: Game, send: () => boolean): ArmyExecution {
+function sentArmy(game: Game, send: () => boolean): AttackExecution {
   const spy = vi.spyOn(game, "addExecution");
   expect(send()).toBe(true);
   const army = spy.mock.calls
     .map((c) => c[0])
-    .find((e): e is ArmyExecution => e instanceof ArmyExecution);
+    .find((e): e is AttackExecution => e instanceof AttackExecution);
   spy.mockRestore();
   expect(army).toBeDefined();
   return army!;

@@ -293,8 +293,8 @@ describe("Disconnected", () => {
         game.executeNextTick();
       }
 
-      // retreat() fires in the tick after player2's last tile is conquered
-      // (toConquer empties, refreshToConquer() finds nothing, then retreat).
+      // retreat() fires once the frontier is empty, which can be the tick
+      // after player2's last tile spends the rest of the budget.
       game.executeNextTick();
 
       // startTroops returned with no malus -> no net troop loss, only passive growth

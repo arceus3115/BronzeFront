@@ -10,7 +10,6 @@ import {
 import { GameConfig } from "@openfront/engine-api/Schemas";
 import { PseudoRandom } from "@openfront/engine-lib/PseudoRandom";
 import { AllianceRequestExecution } from "@openfront/engine/execution/alliance/AllianceRequestExecution";
-import { ArmyExecution } from "@openfront/engine/execution/ArmyExecution";
 import { AttackExecution } from "@openfront/engine/execution/AttackExecution";
 import { DonateTroopsExecution } from "@openfront/engine/execution/DonateTroopExecution";
 import { NationAllianceBehavior } from "@openfront/engine/execution/nation/NationAllianceBehavior";
@@ -271,7 +270,7 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0] instanceof ArmyExecution,
+      (c) => c[0] instanceof AttackExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
     // Nation must retain at least 75% of strongest non-allied neighbor's troops
@@ -345,7 +344,7 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0] instanceof ArmyExecution,
+      (c) => c[0] instanceof AttackExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
     // Nation must retain at least 90% of strongest non-allied neighbor's troops
@@ -367,7 +366,7 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0] instanceof ArmyExecution,
+      (c) => c[0] instanceof AttackExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
     expect(exec.troopsToSend()).toBe(Math.floor(attacker.troops() * 0.2));
@@ -405,8 +404,8 @@ describe("Hard/Impossible troop floor", () => {
     const addExecSpy = vi.spyOn(testGame, "addExecution");
     expect(behavior.sendAttack(testGame.terraNullius())).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0] instanceof ArmyExecution,
-    )?.[0] as ArmyExecution;
+      (c) => c[0] instanceof AttackExecution,
+    )?.[0] as AttackExecution;
     expect(exec.troopsToSend()).toBe(Math.floor(nation.troops() * 0.2));
   });
 
@@ -484,7 +483,7 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0] instanceof ArmyExecution,
+      (c) => c[0] instanceof AttackExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
     expect(exec.troopsToSend()).toBe(Math.floor(attacker.troops() * 0.2));
@@ -566,7 +565,7 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0] instanceof ArmyExecution,
+      (c) => c[0] instanceof AttackExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
     expect(exec.troopsToSend()).toBeGreaterThan(0);
@@ -598,7 +597,7 @@ describe("Hard/Impossible troop floor", () => {
 
     expect(result).toBe(true);
     const exec = addExecSpy.mock.calls.find(
-      (c) => c[0] instanceof ArmyExecution,
+      (c) => c[0] instanceof AttackExecution,
     )?.[0] as any;
     expect(exec).toBeDefined();
     expect(exec.troopsToSend()).toBe(Math.floor(attacker.troops() * 0.2));
@@ -871,17 +870,12 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
     testGame.executeNextTick();
   }
 
-  function sentAttacks(
-    spy: { mock: { calls: any[][] } },
-    game: Game,
-    target: Player,
-  ) {
+  function sentAttacks(spy: { mock: { calls: any[][] } }, target: Player) {
     return spy.mock.calls
       .map((c) => c[0])
-      .filter((e): e is ArmyExecution => {
-        if (!(e instanceof ArmyExecution)) return false;
-        const tile = e.aimedAt();
-        return typeof tile === "number" && game.owner(tile) === target;
+      .filter((e): e is AttackExecution => {
+        if (!(e instanceof AttackExecution)) return false;
+        return e.targetID() === target.id();
       });
   }
 
@@ -905,7 +899,7 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
       const spy = vi.spyOn(testGame, "addExecution");
       behavior.maybeAttack();
 
-      expect(sentAttacks(spy, testGame, enemy)).toHaveLength(expected);
+      expect(sentAttacks(spy, enemy)).toHaveLength(expected);
     },
   );
 
@@ -922,7 +916,7 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
       const spy = vi.spyOn(testGame, "addExecution");
       behavior.maybeAttack();
 
-      expect(sentAttacks(spy, testGame, enemy)).toHaveLength(1);
+      expect(sentAttacks(spy, enemy)).toHaveLength(1);
     },
   );
 
@@ -941,7 +935,7 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
     const spy = vi.spyOn(testGame, "addExecution");
     behavior.maybeAttack();
 
-    const [exec] = sentAttacks(spy, testGame, enemy);
+    const [exec] = sentAttacks(spy, enemy);
     expect(exec).toBeDefined();
     expect(exec.troopsToSend()).toBe(Math.floor(nation.troops() * 0.2));
   });
@@ -961,7 +955,7 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
     const spy = vi.spyOn(testGame, "addExecution");
     behavior.maybeAttack();
 
-    const [exec] = sentAttacks(spy, testGame, enemy);
+    const [exec] = sentAttacks(spy, enemy);
     expect(exec).toBeDefined();
     const sent = exec.troopsToSend() as number;
     expect(sent).toBeGreaterThan(0);
@@ -981,7 +975,7 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
     const spy = vi.spyOn(testGame, "addExecution");
     behavior.maybeAttack();
 
-    const [exec] = sentAttacks(spy, testGame, enemy);
+    const [exec] = sentAttacks(spy, enemy);
     expect(exec).toBeDefined();
     expect(exec.troopsToSend()).toBe(Math.floor(nation.troops() * 0.2));
   });
@@ -1030,7 +1024,7 @@ describe("Retaliation by difficulty - end-to-end via maybeAttack", () => {
       const spy = vi.spyOn(testGame, "addExecution");
       behavior.maybeAttack();
 
-      const [exec] = sentAttacks(spy, testGame, enemy);
+      const [exec] = sentAttacks(spy, enemy);
       const sent = exec?.troopsToSend() ?? 0;
       if (exec !== undefined) {
         expect(sent).toBe(Math.floor(nation.troops() * 0.2));
@@ -1190,7 +1184,7 @@ describe("City troops and expansion", () => {
     const sent = () =>
       attacks.mock.calls
         .map((c) => c[0])
-        .filter((e): e is ArmyExecution => e instanceof ArmyExecution);
+        .filter((e): e is AttackExecution => e instanceof AttackExecution);
     return { game, nation, bot, human, behavior, sent };
   }
 
@@ -1206,17 +1200,9 @@ describe("City troops and expansion", () => {
   });
 
   it("with high starting gold, attacks bots, but not players, below the reserve ratio its cities raise", async () => {
-    const { game, bot, human, behavior, sent } =
-      await setupCityRich(25_000_000);
+    const { bot, human, behavior, sent } = await setupCityRich(25_000_000);
     behavior["attackBestTarget"]([], [bot, human]);
-    expect(
-      sent().map((e) => {
-        const tile = e.aimedAt();
-        if (typeof tile !== "number") return null;
-        const owner = game.owner(tile);
-        return owner.isPlayer() ? owner.id() : null;
-      }),
-    ).toEqual([bot.id()]);
+    expect(sent().map((e) => e.targetID())).toEqual([bot.id()]);
     expect(behavior.sendAttack(human)).toBe(false);
   });
 
@@ -1360,9 +1346,8 @@ describe("Assisting allies", () => {
       spy.mock.calls
         .map((c) => c[0])
         .filter((e) => {
-          if (!(e instanceof ArmyExecution)) return false;
-          const tile = e.aimedAt();
-          return typeof tile === "number" && game.owner(tile) === p;
+          if (!(e instanceof AttackExecution)) return false;
+          return e.targetID() === p.id();
         });
     return { nation, ally, target, behavior, emoji, attacksOn };
   }

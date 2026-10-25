@@ -2,6 +2,7 @@ import { TileRef } from "@openfront/engine-api/game/GameMap";
 import { PlayerType, UnitType } from "@openfront/engine-api/game/GameTypes";
 import { landSpeed } from "@openfront/engine-lib/game/Biome";
 import {
+  armyRadius,
   BRONZE_STRENGTH,
   siegeDefense,
 } from "@openfront/engine-lib/game/BronzeRules";
@@ -31,8 +32,9 @@ export function setArmyTroops(unitId: number, troops: number): void {
 }
 
 /**
- * A body of troops that marches to a tile, capturing land at the biome
- * speed. A city tile is besieged instead of flipped until the defense falls.
+ * A body of troops that pushes a disk of land outward from its own tile,
+ * then steps only onto land it already holds. A city tile is besieged
+ * instead of flipped until the defense falls.
  */
 /** Points an existing army at a new tile. The army reads the unit target. */
 export class OrderArmyExecution implements Execution {
@@ -75,6 +77,7 @@ export class ArmyExecution implements Execution {
   private mg!: Game;
   private army: Unit | undefined;
   private step = 0;
+  private captureBudget = 0;
   private troops = 0;
 
   /** Troops this order will spend once it starts. */
@@ -87,6 +90,8 @@ export class ArmyExecution implements Execution {
     return this.target;
   }
   private attack: Attack | null = null;
+  private nbuf: TileRef[] = [0, 0, 0, 0];
+  private nbuf2: TileRef[] = [0, 0, 0, 0];
 
   constructor(
     private player: Player,
@@ -168,23 +173,45 @@ export class ArmyExecution implements Execution {
       return;
     }
     const goal = this.army.targetTile() ?? (this.target as TileRef);
-    if (this.army.tile() === goal) {
+    // Siege before the brush, so a defense post on the next tile still
+    // counts. A finished siege ends the march. The step target is stable
+    // across the push: cities in the disk are blocked, so they are not taken.
+    this.step += landSpeed(this.mg.biome(this.army.tile()));
+    let spentStep = false;
+    let next: TileRef | undefined;
+    if (this.step >= 1) {
+      next = this.stepToward(this.army.tile(), goal);
+      const city = next === undefined ? undefined : this.cityAt(next);
+      if (city !== undefined && city.owner() !== this.player) {
+        this.step -= 1;
+        spentStep = true;
+        this.besiege(city);
+        if (!this.active || this.army === undefined || !this.army.isActive()) {
+          return;
+        }
+      }
+    }
+    const open = this.push(goal);
+    if (!this.active || this.army === undefined || !this.army.isActive()) {
+      return;
+    }
+    if (this.army.tile() === goal && !open) {
       this.arrive(goal);
       return;
     }
-    this.step += landSpeed(this.mg.biome(this.army.tile()));
-    if (this.step < 1) return;
-    this.step -= 1;
-    const next = this.stepToward(this.army.tile(), goal);
-    if (next === undefined) return;
-    const city = this.cityAt(next);
-    if (city !== undefined && city.owner() !== this.player) {
-      this.besiege(city);
+    if (spentStep || this.step < 1) return;
+    if (next === undefined) {
+      this.step -= 1;
       return;
     }
-    this.take(next);
+    // The disk is still open, or the next tile is not ours yet. This tick
+    // pushes instead of walking ahead of the fill.
+    if (open || this.mg.owner(next) !== this.player) {
+      this.step -= 1;
+      return;
+    }
+    this.step -= 1;
     this.army.move(next);
-    if (next === goal) this.arrive(goal);
   }
 
   isActive(): boolean {
@@ -192,6 +219,125 @@ export class ArmyExecution implements Execution {
   }
   activeDuringSpawnPhase(): boolean {
     return false;
+  }
+
+  /**
+   * Claims connected foreign land inside the troop radius, nearest first.
+   * Returns true while any claimable tile in that disk is still unowned.
+   * The disk is scanned once; a capture only reconsiders its foreign neighbors.
+   */
+  private push(goal: TileRef): boolean {
+    const army = this.army;
+    if (army === undefined) return false;
+    const origin = army.tile();
+    const radius = armyRadius(this.troops);
+    const blocked = this.blockedTiles(origin, radius);
+    const ax = this.mg.x(origin);
+    const ay = this.mg.y(origin);
+    const sx = Math.sign(this.mg.x(goal) - ax);
+    const sy = Math.sign(this.mg.y(goal) - ay);
+    const limit = radius * radius;
+    const nodes = new Map<TileRef, FrontierNode>();
+    const heap = new FrontierHeap();
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        const distSq = dx * dx + dy * dy;
+        if (distSq > limit) continue;
+        const x = ax + dx;
+        const y = ay + dy;
+        if (!this.mg.isValidCoord(x, y)) continue;
+        const tile = this.mg.ref(x, y);
+        if (blocked.has(tile) || !this.canClaim(tile)) continue;
+        const owned = this.ownedNeighbors(tile);
+        if (owned === 0) continue;
+        const node: FrontierNode = {
+          tile,
+          distSq,
+          forward: dx * sx + dy * sy,
+          owned,
+          seq: 0,
+        };
+        nodes.set(tile, node);
+        heap.push(node);
+      }
+    }
+    if (heap.length === 0) return false;
+    this.captureBudget += landSpeed(this.mg.biome(origin)) * (2 * radius);
+
+    while (heap.length > 0) {
+      const entry = heap.pop();
+      if (entry === undefined) break;
+      const node = entry.node;
+      if (entry.seq !== node.seq || nodes.get(node.tile) !== node) continue;
+      if (!this.canClaim(node.tile)) {
+        nodes.delete(node.tile);
+        continue;
+      }
+      const cost = 1 / landSpeed(this.mg.biome(node.tile));
+      if (this.captureBudget < cost) return true;
+      this.captureBudget -= cost;
+      this.take(node.tile);
+      nodes.delete(node.tile);
+      const count = this.mg.neighbors4(node.tile, this.nbuf2);
+      for (let i = 0; i < count; i++) {
+        const nb = this.nbuf2[i];
+        if (blocked.has(nb) || !this.canClaim(nb)) continue;
+        const nx = this.mg.x(nb) - ax;
+        const ny = this.mg.y(nb) - ay;
+        if (nx * nx + ny * ny > limit) continue;
+        const existing = nodes.get(nb);
+        if (existing !== undefined) {
+          existing.owned += 1;
+          existing.seq += 1;
+          heap.push(existing);
+          continue;
+        }
+        const owned = this.ownedNeighbors(nb);
+        if (owned === 0) continue;
+        const added: FrontierNode = {
+          tile: nb,
+          distSq: nx * nx + ny * ny,
+          forward: nx * sx + ny * sy,
+          owned,
+          seq: 0,
+        };
+        nodes.set(nb, added);
+        heap.push(added);
+      }
+    }
+    return false;
+  }
+
+  private canClaim(tile: TileRef): boolean {
+    if (this.mg.owner(tile) === this.player) return false;
+    if (!this.mg.isLand(tile) || this.mg.isImpassable(tile)) return false;
+    return true;
+  }
+
+  private ownedNeighbors(tile: TileRef): number {
+    let count = 0;
+    const n = this.mg.neighbors4(tile, this.nbuf);
+    for (let i = 0; i < n; i++) {
+      if (this.mg.owner(this.nbuf[i]) === this.player) count++;
+    }
+    return count;
+  }
+
+  private blockedTiles(origin: TileRef, radius: number): Set<TileRef> {
+    const blocked = new Set<TileRef>();
+    for (const hit of this.mg.nearbyUnits(origin, radius, [
+      UnitType.City,
+      UnitType.Army,
+    ])) {
+      const unit = hit.unit;
+      if (!unit.isActive()) continue;
+      if (unit.type() === UnitType.Army && unit.owner() === this.player) {
+        continue;
+      }
+      blocked.add(unit.tile());
+    }
+    return blocked;
   }
 
   private strength(): number {
@@ -221,9 +367,8 @@ export class ArmyExecution implements Execution {
       }
     }
     if (best !== null) return best;
-    return this.player.borderTiles().size > 0
-      ? [...this.player.borderTiles()][0]
-      : 0;
+    for (const tile of this.player.borderTiles()) return tile;
+    return 0;
   }
 
   private spawnTile(target: TileRef): TileRef | null {
@@ -251,12 +396,14 @@ export class ArmyExecution implements Execution {
   private stepToward(from: TileRef, goal: TileRef): TileRef | undefined {
     let best: TileRef | undefined;
     let bestD = this.mg.manhattanDist(from, goal);
-    for (const n of this.mg.neighbors(from)) {
-      if (!this.mg.isLand(n) || this.mg.isImpassable(n)) continue;
-      const d = this.mg.manhattanDist(n, goal);
+    const n = this.mg.neighbors4(from, this.nbuf);
+    for (let i = 0; i < n; i++) {
+      const neighbor = this.nbuf[i];
+      if (!this.mg.isLand(neighbor) || this.mg.isImpassable(neighbor)) continue;
+      const d = this.mg.manhattanDist(neighbor, goal);
       if (d < bestD) {
         bestD = d;
-        best = n;
+        best = neighbor;
       }
     }
     return best;
@@ -345,6 +492,7 @@ export class ArmyExecution implements Execution {
       troops: this.troops,
       target: typeof this.target === "number" ? this.target : 0,
       step: this.step,
+      captureBudget: this.captureBudget,
       army: this.army !== undefined ? w.unit(this.army) : null,
       existingUnitId: this.existingUnitId,
     });
@@ -357,6 +505,7 @@ export class ArmyExecution implements Execution {
     this.troops = s.troops;
     this.target = s.target;
     this.step = s.step;
+    this.captureBudget = s.captureBudget;
     this.army = s.army === null ? undefined : r.unit(s.army);
     this.existingUnitId = s.existingUnitId;
     if (this.army !== undefined) armyTroops.set(this.army.id(), this.troops);
@@ -384,16 +533,90 @@ const ArmyStateSchema = z.object({
   troops: zInt(),
   target: zTile(),
   step: z.number(),
+  captureBudget: z.number(),
   army: z.number().int().nullable(),
   existingUnitId: z.number().int().nullable(),
 });
 
 export const ArmyExecutionSnapshot = execSnapshotType({
   name: "Army",
-  version: 2,
+  version: 3,
   schema: ArmyStateSchema,
   migrations: {
     1: (d) => ({ ...d, existingUnitId: null }),
+    2: (d) => ({ ...d, captureBudget: 0 }),
   },
   cls: () => ArmyExecution,
 });
+
+interface FrontierNode {
+  tile: TileRef;
+  distSq: number;
+  forward: number;
+  owned: number;
+  seq: number;
+}
+
+/** Min-heap. Equal keys keep the earlier node; stale seqs are skipped by the caller. */
+class FrontierHeap {
+  private data: { node: FrontierNode; seq: number }[] = [];
+
+  get length(): number {
+    return this.data.length;
+  }
+
+  push(node: FrontierNode): void {
+    this.data.push({ node, seq: node.seq });
+    this.siftUp(this.data.length - 1);
+  }
+
+  pop(): { node: FrontierNode; seq: number } | undefined {
+    const data = this.data;
+    if (data.length === 0) return undefined;
+    const top = data[0];
+    const last = data.pop();
+    if (last !== undefined && data.length > 0) {
+      data[0] = last;
+      this.siftDown(0);
+    }
+    return top;
+  }
+
+  private siftUp(index: number): void {
+    const data = this.data;
+    const entry = data[index];
+    while (index > 0) {
+      const parent = (index - 1) >> 1;
+      if (!frontierBefore(entry.node, data[parent].node)) break;
+      data[index] = data[parent];
+      index = parent;
+    }
+    data[index] = entry;
+  }
+
+  private siftDown(index: number): void {
+    const data = this.data;
+    const entry = data[index];
+    const n = data.length;
+    while (true) {
+      const left = index * 2 + 1;
+      if (left >= n) break;
+      const right = left + 1;
+      let child = left;
+      if (right < n && frontierBefore(data[right].node, data[left].node)) {
+        child = right;
+      }
+      if (!frontierBefore(data[child].node, entry.node)) break;
+      data[index] = data[child];
+      index = child;
+    }
+    data[index] = entry;
+  }
+}
+
+function frontierBefore(a: FrontierNode, b: FrontierNode): boolean {
+  if (a.distSq !== b.distSq) return a.distSq < b.distSq;
+  if (a.forward !== b.forward) return a.forward > b.forward;
+  if (a.owned !== b.owned) return a.owned > b.owned;
+  return a.tile < b.tile;
+}
